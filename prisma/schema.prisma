@@ -1,0 +1,1099 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Beacon {
+  id        String   @id @default(uuid())
+  major     Int
+  minor     Int
+  room_id   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  room      Room     @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  scans     Scan[]
+
+  @@index([room_id], map: "beacon_room_id_idx")
+}
+
+model Class {
+  id          String       @id @default(uuid())
+  subject_id  String
+  division_id String
+  teacher_id  String
+  room_id     String
+  start_date  DateTime
+  end_date    DateTime
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @default(now()) @map("updated_at")
+  attendances Attendance[]
+  division    Division     @relation(fields: [division_id], references: [id], onDelete: Cascade)
+  room        Room         @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  subject     Subject      @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  teacher     Teacher      @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  scans       Scan[]
+  scanWindows ScanWindow[]
+
+  @@index([subject_id], map: "class_subject_id_idx")
+  @@index([division_id], map: "class_division_id_idx")
+  @@index([teacher_id], map: "class_teacher_id_idx")
+  @@index([room_id], map: "class_room_id_idx")
+}
+
+model Scan {
+  id                 String              @id @default(uuid())
+  student_id         String
+  class_id           String
+  detected_beacon_id String
+  rssi               Int                 @default(0)
+  scan_window_id     String
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @default(now()) @map("updated_at")
+  class              Class               @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  detectedBeacon     Beacon              @relation(fields: [detected_beacon_id], references: [id], onDelete: Cascade)
+  scanWindow         ScanWindow          @relation(fields: [scan_window_id], references: [id], onDelete: Cascade)
+  student            Student             @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  windowMappings     WindowScanMapping[]
+
+  @@index([student_id], map: "scan_student_id_idx")
+  @@index([class_id], map: "scan_class_id_idx")
+  @@index([detected_beacon_id], map: "scan_beacon_id_idx")
+  @@index([scan_window_id], map: "scan_window_id_idx")
+}
+
+model ScanWindow {
+  id             String              @id @default(uuid())
+  student_id     String
+  class_id       String
+  is_processed   Boolean
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @default(now()) @map("updated_at")
+  scans          Scan[]
+  class          Class               @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  student        Student             @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  windowMappings WindowScanMapping[]
+
+  @@index([student_id], map: "scan_window_student_id_idx")
+  @@index([class_id], map: "scan_window_class_id_idx")
+}
+
+model Attendance {
+  id                    String             @id @default(uuid())
+  student_id            String
+  class_id              String
+  status                AttendanceStatus
+  successful_scan_count Int                @default(3)
+  marked_by             AttendanceMarkedBy
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @default(now()) @map("updated_at")
+  class                 Class              @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  student               Student            @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@unique([student_id, class_id], name: "attendance_student_class_unique")
+  @@index([student_id], map: "attendance_student_id_idx")
+  @@index([class_id], map: "attendance_class_id_idx")
+}
+
+model WindowScanMapping {
+  id             String     @id @default(uuid())
+  scan_window_id String
+  scan_id        String
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @default(now()) @map("updated_at")
+  scan           Scan       @relation(fields: [scan_id], references: [id], onDelete: Cascade)
+  scanWindow     ScanWindow @relation(fields: [scan_window_id], references: [id], onDelete: Cascade)
+
+  @@unique([scan_window_id, scan_id], name: "mapping_window_scan_unique")
+  @@index([scan_window_id], map: "mapping_scan_window_id_idx")
+  @@index([scan_id], map: "mapping_scan_id_idx")
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  beacons   Beacon[]
+  classes   Class[]
+}
+
+model Problem {
+  id                String             @id @default(uuid())
+  title             String             @db.VarChar(200)
+  problem_statement String
+  constraints       String?            @db.VarChar(200)
+  difficulty        Difficulty
+  created_by        String
+  is_active         Boolean            @default(true)
+  is_public         Boolean            @default(false)
+  createdAt         DateTime?          @map("created_at")
+  updatedAt         DateTime?          @map("updated_at")
+  contestProblems   ContestProblem[]
+  teacher           Teacher            @relation(fields: [created_by], references: [id], onDelete: Cascade)
+  moderators        ProblemModerator[]
+  tags              ProblemTag[]
+  submissions       Submission[]
+  testCases         TestCase[]
+
+  @@index([created_by], map: "problem_teacher_id_idx")
+}
+
+model ProblemTag {
+  id         String   @id @default(uuid())
+  problem_id String
+  tag_id     String
+  createdAt  DateTime @default(now()) @map("created_at")
+  problem    Problem  @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@unique([problem_id, tag_id], name: "problem_tag_unique")
+}
+
+model Tag {
+  id          String       @id @default(uuid())
+  name        String       @unique @db.VarChar(50)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @default(now()) @map("updated_at")
+  problemTags ProblemTag[]
+}
+
+model TestCase {
+  id                String             @id @default(uuid())
+  problem_id        String
+  input             String             @db.VarChar(200)
+  expected_output   String             @db.VarChar(200)
+  is_sample         Boolean            @default(false)
+  point             Int
+  explanation       String?
+  createdAt         DateTime?          @map("created_at")
+  updatedAt         DateTime           @default(now()) @map("updated_at")
+  submissionResults SubmissionResult[]
+  problem           Problem            @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+
+  @@index([problem_id], map: "test_case_problem_id_idx")
+}
+
+model ProblemModerator {
+  id           String   @id @default(uuid())
+  problem_id   String
+  moderator_id String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+  moderator    Teacher  @relation(fields: [moderator_id], references: [id], onDelete: Cascade)
+  problem      Problem  @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+
+  @@index([problem_id], map: "problem_moderator_problem_id_idx")
+  @@index([moderator_id], map: "problem_moderator_teacher_id_idx")
+}
+
+model Contest {
+  id               String             @id @default(uuid())
+  title            String             @db.VarChar(200)
+  description      String?
+  start_time       DateTime
+  end_time         DateTime
+  created_by       String
+  is_open          Boolean            @default(false)
+  createdAt        DateTime?          @map("created_at")
+  updatedAt        DateTime?          @map("updated_at")
+  allowedLanguages AllowedLanguage[]
+  batchContests    BatchContest[]
+  teacher          Teacher            @relation(fields: [created_by], references: [id], onDelete: Cascade)
+  moderators       ContestModerator[]
+  problems         ContestProblem[]
+  submissions      Submission[]
+
+  @@index([created_by], map: "contest_teacher_id_idx")
+}
+
+model BatchContest {
+  id         String   @id @default(uuid())
+  batch_id   String
+  contest_id String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+  batch      Batch    @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  contest    Contest  @relation(fields: [contest_id], references: [id], onDelete: Cascade)
+
+  @@index([batch_id], map: "batch_contest_batch_id_idx")
+  @@index([contest_id], map: "batch_contest_contest_id_idx")
+}
+
+model ProgrammingLanguage {
+  id               String            @id @default(uuid())
+  name             String            @db.VarChar(200)
+  judge0_code      Int
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @default(now()) @map("updated_at")
+  allowedLanguages AllowedLanguage[]
+  submissions      Submission[]
+}
+
+model AllowedLanguage {
+  id          String              @id @default(uuid())
+  language_id String
+  contest_id  String
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @default(now()) @map("updated_at")
+  contest     Contest             @relation(fields: [contest_id], references: [id], onDelete: Cascade)
+  language    ProgrammingLanguage @relation(fields: [language_id], references: [id], onDelete: Cascade)
+
+  @@index([language_id], map: "allowed_language_lang_id_idx")
+  @@index([contest_id], map: "allowed_language_contest_id_idx")
+}
+
+model ContestModerator {
+  id           String   @id @default(uuid())
+  contest_id   String
+  moderator_id String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+  contest      Contest  @relation(fields: [contest_id], references: [id], onDelete: Cascade)
+  moderator    Teacher  @relation(fields: [moderator_id], references: [id], onDelete: Cascade)
+
+  @@index([contest_id], map: "contest_moderator_contest_id_idx")
+  @@index([moderator_id], map: "contest_moderator_teacher_id_idx")
+}
+
+model ContestProblem {
+  id         String   @id @default(uuid())
+  contest_id String
+  problem_id String
+  points     Int      @default(100)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+  contest    Contest  @relation(fields: [contest_id], references: [id], onDelete: Cascade)
+  problem    Problem  @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+
+  @@unique([contest_id, problem_id], name: "contest_problem_unique")
+  @@index([contest_id], map: "contest_problem_contest_id_idx")
+  @@index([problem_id], map: "contest_problem_problem_id_idx")
+}
+
+model Submission {
+  id             String              @id @default(uuid())
+  user_id        String
+  problem_id     String
+  contest_id     String?
+  language_id    String
+  code           String              @default("")
+  status_id      String
+  execution_time Float?
+  memory_used    Float?
+  submitted_at   DateTime?
+  contest        Contest?            @relation(fields: [contest_id], references: [id], onDelete: Cascade)
+  language       ProgrammingLanguage @relation(fields: [language_id], references: [id], onDelete: Cascade)
+  problem        Problem             @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+  status         SubmissionStatus    @relation(fields: [status_id], references: [id], onDelete: Cascade)
+  student        Student             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  results        SubmissionResult[]
+
+  @@index([user_id], map: "submission_user_id_idx")
+  @@index([problem_id], map: "submission_problem_id_idx")
+  @@index([contest_id], map: "submission_contest_id_idx")
+  @@index([language_id], map: "submission_language_id_idx")
+  @@index([status_id], map: "submission_status_id_idx")
+}
+
+model SubmissionStatus {
+  id                String             @id @default(uuid())
+  name              String             @db.VarChar(200)
+  submissions       Submission[]
+  submissionResults SubmissionResult[]
+}
+
+model SubmissionResult {
+  id             String           @id @default(uuid())
+  submission_id  String
+  test_case_id   String
+  status_id      String
+  execution_time Float?
+  memory_used    Int?
+  status         SubmissionStatus @relation(fields: [status_id], references: [id], onDelete: Cascade)
+  submission     Submission       @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+  testCase       TestCase         @relation(fields: [test_case_id], references: [id], onDelete: Cascade)
+
+  @@index([submission_id], map: "submission_result_submission_id_idx")
+  @@index([test_case_id], map: "submission_result_test_case_id_idx")
+  @@index([status_id], map: "submission_result_status_id_idx")
+}
+
+model Center {
+  id            String    @id @default(uuid())
+  name          String
+  location      String
+  code          Int       @unique
+  business_head String?
+  academic_head String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @map("updated_at")
+  batches       Batch[]
+  academicHead  Admin?     @relation("AcademicHead", fields: [academic_head], references: [id], onDelete: Cascade)
+  businessHead  Admin?     @relation("BusinessHead", fields: [business_head], references: [id], onDelete: Cascade)
+  cohorts       Cohort[]
+  policies      Policy[]
+  divisions Division[] 
+  schools       School[]
+  students      Student[]
+  teachers      Teacher[]
+
+  @@index([business_head], map: "center_business_head_idx")
+  @@index([academic_head], map: "center_academic_head_idx")
+}
+
+model RoleAdmin {
+  id        String   @id @default(uuid())
+  role      RoleType @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  admins    Admin[]
+}
+
+model Admin {
+  id                  String         @id @default(uuid())
+  name                String
+  email               String         @unique
+  phone               String         @unique
+  googleId            String?
+  linkedin            String?
+  role_id             String
+  designation         String?
+  googleAccessToken   String?
+  googleRefreshToken  String?
+  googleTokenExpiry   DateTime?
+  lastLoginAt DateTime?
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @default(now()) @map("updated_at")
+  role                RoleAdmin      @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  behaviours          Behaviour[]
+  academicHeadCenters Center[]       @relation("AcademicHead")
+  businessHeadCenters Center[]       @relation("BusinessHead")
+  clubOfficials       ClubOfficial[]
+}
+model School {
+  id             String          @id @default(uuid())
+  name           SchoolName
+  center_id      String
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @default(now()) @map("updated_at")
+  batches        Batch[]
+  center         Center          @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  students       Student[]
+  divisions      Division[]
+  teacherSchools TeacherSchool[]
+
+  @@index([center_id], map: "school_center_id_idx")
+  @@unique([center_id, name], map: "unique_school_name_per_center") 
+}
+
+model TeacherCohort {
+  id             String   @id @default(uuid())
+  teacher_id     String
+  cohort_id      String
+  specialisation String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+  cohort         Cohort   @relation(fields: [cohort_id], references: [id], onDelete: Cascade)
+  teacher        Teacher  @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+
+  @@index([teacher_id], map: "teacher_cohort_teacher_id_idx")
+  @@index([cohort_id], map: "teacher_cohort_cohort_id_idx")
+}
+
+model TeacherSchool {
+  id             String   @id @default(uuid())
+  teacher_id     String
+  school_id      String
+  specialisation String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+  school         School   @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  teacher        Teacher  @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+
+  @@index([teacher_id], map: "teacher_school_teacher_id_idx")
+  @@index([school_id], map: "teacher_school_school_id_idx")
+}
+
+model Student {
+  id                 String             @id @default(uuid())
+  name               String
+  email              String             @unique
+  googleId           String?
+  gender             Gender
+  phone              String             @unique
+  address            String?
+  is_active          Boolean            @default(true)
+  firstLoggedIn      Boolean            @default(false)
+  enrollment_id      String             @unique
+  device_id          String?            @unique
+  center_id          String
+  school_id          String
+  batch_id           String
+  semester_id        String?
+  division_id        String
+  cohort_id          String?
+  degree_id          String?
+  googleAccessToken  String?
+  googleRefreshToken String?
+  googleTokenExpiry  DateTime?
+  lastLoginAt DateTime?
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @default(now()) @map("updated_at")
+  academicHistory    AcademicHistory?
+  achievements       Achievement[]
+  attendances        Attendance[]
+  behaviours         Behaviour[]
+  certifications     Certification[]
+  clubs              Club[]             @relation("ClubLeader")
+  clubCoreTeams      ClubCoreTeam[]
+  personalDetail     PersonalDetail?
+  placements         Placement[]
+  projects           Project[]
+  scans              Scan[]
+  scanWindows        ScanWindow[]
+  socialLinks        SocialLink[]
+  batch              Batch              @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  center             Center             @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  cohort             Cohort?            @relation(fields: [cohort_id], references: [id], onDelete: Cascade)
+  degree             ExternalDegree?    @relation(fields: [degree_id], references: [id], onDelete: Cascade)
+  division           Division           @relation(fields: [division_id], references: [id], onDelete: Cascade)
+  school             School             @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  semester           Semester?          @relation(fields: [semester_id], references: [id], onDelete: Cascade)
+  examMarks          StudentExamMarks[]
+  studentLogs        StudentLog[]
+  submissions        Submission[]
+}
+
+model Behaviour {
+  id          String   @id @default(uuid())
+  admin_id    String
+  action      String
+  student_id  String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+  admin       Admin    @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  student     Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([admin_id], map: "behaviour_admin_id_idx")
+  @@index([student_id], map: "behaviour_student_id_idx")
+}
+
+model SocialLink {
+  id         String   @id @default(uuid())
+  student_id String
+  platform   String
+  link       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+  student    Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "social_link_student_id_idx")
+}
+
+model StudentLog {
+  id              String   @id @default(uuid())
+  student_id      String
+  action          String
+  old_data        Json?
+  new_data        Json?
+  changed_by      String
+  changed_by_type String
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @map("updated_at")
+  student         Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "student_log_student_id_idx")
+}
+
+model Project {
+  id           String    @id @default(uuid())
+  student_id   String
+  name         String
+  description  String?
+  technologies String?
+  github_link  String?
+  live_link    String?
+  start_date   DateTime
+  end_date     DateTime?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @map("updated_at")
+  student      Student   @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "project_student_id_idx")
+}
+
+model Certification {
+  id           String    @id @default(uuid())
+  student_id   String
+  name         String
+  organisation String
+  start_date   DateTime
+  end_date     DateTime?
+  link         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @map("updated_at")
+  student      Student   @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "certification_student_id_idx")
+}
+
+model Education {
+  id                  String            @id @default(uuid())
+  institution         String
+  degree              String
+  field_of_study      String
+  start_date          DateTime
+  end_date            DateTime?
+  grade               Float?
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @default(now()) @map("updated_at")
+  ugEducationHistory  AcademicHistory[] @relation("UndergradEducation")
+  xEducationHistory   AcademicHistory[] @relation("XEducation")
+  xiiEducationHistory AcademicHistory[] @relation("XIIEducation")
+}
+
+model AcademicHistory {
+  id            String     @id @default(uuid())
+  student_id    String     @unique
+  x_education   String?
+  xii_education String?
+  undergraduate String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @default(now()) @map("updated_at")
+  student       Student    @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  undergrad     Education? @relation("UndergradEducation", fields: [undergraduate], references: [id], onDelete: Cascade)
+  xEducation    Education? @relation("XEducation", fields: [x_education], references: [id], onDelete: Cascade)
+  xiiEducation  Education? @relation("XIIEducation", fields: [xii_education], references: [id], onDelete: Cascade)
+
+  @@index([x_education], map: "academic_history_x_edu_idx")
+  @@index([xii_education], map: "academic_history_xii_edu_idx")
+  @@index([undergraduate], map: "academic_history_ug_edu_idx")
+}
+
+model Achievement {
+  id           String   @id @default(uuid())
+  student_id   String
+  title        String
+  description  String?
+  start_date   DateTime
+  organisation String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+  student      Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "achievement_student_id_idx")
+}
+
+model Cohort {
+  id             String          @id @default(uuid())
+  name           String
+  center_id      String
+  start_date     DateTime
+  end_date       DateTime?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @default(now()) @map("updated_at")
+  center         Center          @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  students       Student[]
+  teacherCohorts TeacherCohort[]
+
+  @@index([center_id], map: "cohort_center_id_idx")
+}
+
+model Division {
+  id               String    @id @default(uuid())
+  code             String    @unique
+  center_id        String
+  school_id        String
+  batch_id         String
+  current_semester String?
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @map("updated_at")
+
+  classes          Class[]
+  batch            Batch     @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  semester         Semester? @relation(fields: [current_semester], references: [id], onDelete: Cascade)
+  students         Student[]
+
+  center           Center    @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  school           School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
+
+  @@index([batch_id], map: "division_batch_id_idx")
+  @@index([current_semester], map: "division_semester_id_idx")
+  @@index([center_id], map: "division_center_id_idx")
+  @@index([school_id], map: "division_school_id_idx")
+}
+
+
+model PersonalDetail {
+  id                     String   @id @default(uuid())
+  student_id             String   @unique
+  personal_email         String   @unique
+  fathers_name           String?
+  mothers_name           String?
+  fathers_contact_number String?
+  mothers_contact_number String?
+  fathers_occupation     String?
+  mothers_occupation     String?
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @default(now()) @map("updated_at")
+  student                Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "personal_detail_student_id_idx")
+}
+
+model Batch {
+  id               String         @id @default(uuid())
+  name             String         @unique
+  center_id        String
+  school_id        String
+  current_semester String
+  start_date       DateTime
+  end_date         DateTime?
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @default(now()) @map("updated_at")
+  center           Center         @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  semester         Semester       @relation("CurrentSemester", fields: [current_semester], references: [id], onDelete: Cascade)
+  school           School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  contests         BatchContest[]
+  divisions        Division[]
+  semesters        Semester[]     @relation("BatchSemesters")
+  students         Student[]
+
+  @@index([center_id], map: "batch_center_id_idx")
+  @@index([school_id], map: "batch_school_id_idx")
+  @@index([current_semester], map: "batch_semester_id_idx")
+}
+
+model Semester {
+  id              String     @id @default(uuid())
+  number          Int
+  batch_id        String
+  start_date      DateTime
+  end_date        DateTime?
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @default(now()) @map("updated_at")
+  currentForBatch Batch[]    @relation("CurrentSemester")
+  divisions       Division[]
+  batch           Batch      @relation("BatchSemesters", fields: [batch_id], references: [id], onDelete: Cascade)
+  students        Student[]
+  subjects        Subject[]
+
+  @@index([batch_id], map: "semester_batch_id_idx")
+}
+
+model Mentor {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  phone       String   @unique
+  linkedin    String?
+  designation String?
+  company     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+}
+
+model Subject {
+  id          String             @id @default(uuid())
+  name        String
+  semester_id String
+  credits     Int
+  code        String             @unique
+  teacher_id  String
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @default(now()) @map("updated_at")
+  classes     Class[]
+  exams       Exam[]
+  examMarks   StudentExamMarks[]
+  semester    Semester           @relation(fields: [semester_id], references: [id], onDelete: Cascade)
+  teacher     Teacher            @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+
+  @@index([semester_id], map: "subject_semester_id_idx")
+  @@index([teacher_id], map: "subject_teacher_id_idx")
+}
+
+model Exam {
+  id            String             @id @default(uuid())
+  name          String
+  weightage     Float
+  full_marks    Float
+  passing_marks Float
+  exam_type     ExamType
+  exam_date     DateTime
+  subject_id    String
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @default(now()) @map("updated_at")
+  subject       Subject            @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  marks         StudentExamMarks[]
+
+  @@index([subject_id], map: "exam_subject_id_idx")
+}
+
+model StudentExamMarks {
+  id             String   @id @default(uuid())
+  student_id     String
+  subject_id     String
+  exam_id        String
+  marks_obtained Float
+  is_present     Boolean  @default(true)
+  remarks        String?
+  graded_by      String
+  graded_at      DateTime
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+  exam           Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  teacher        Teacher  @relation("GradedExams", fields: [graded_by], references: [id], onDelete: Cascade)
+  student        Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  subject        Subject  @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+
+  @@unique([student_id, exam_id], name: "student_exam_unique")
+  @@index([student_id], map: "exam_marks_student_id_idx")
+  @@index([subject_id], map: "exam_marks_subject_id_idx")
+  @@index([exam_id], map: "exam_marks_exam_id_idx")
+  @@index([graded_by], map: "exam_marks_teacher_id_idx")
+}
+
+model TeacherExperience {
+  id           String    @id @default(uuid())
+  title        String
+  company_name String
+  location     String?
+  work_mode    WorkMode
+  start_date   DateTime
+  end_date     DateTime?
+  description  String?
+  teacher_id   String
+  createdAt    DateTime? @map("created_at")
+  updatedAt    DateTime? @map("updated_at")
+  teacher      Teacher   @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+
+  @@index([teacher_id], map: "teacher_experience_teacher_id_idx")
+}
+
+model Teacher {
+  id                 String                 @id @default(uuid())
+  name               String
+  email              String                 @unique
+  phone              String                 @unique
+  role               TeacherRole
+  googleId           String?
+  linkedin           String?
+  personal_mail      String?
+  github_link        String?
+  gender             Gender?
+  center_id          String
+  designation        String?
+  googleAccessToken  String?
+  googleRefreshToken String?
+  googleTokenExpiry  DateTime?
+  lastLoginAt DateTime?
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @default(now()) @map("updated_at")
+  classes            Class[]
+  clubOfficials      ClubOfficial[]
+  contests           Contest[]
+  contestModerations ContestModerator[]
+  createdProblems    Problem[]
+  problemModerations ProblemModerator[]
+  examMarks          StudentExamMarks[]     @relation("GradedExams")
+  subjects           Subject[]
+  center             Center                 @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  teacherCohorts     TeacherCohort[]
+  teacherExperiences TeacherExperience[]
+  researchPapers     TeacherResearchPaper[]
+  teacherSchools     TeacherSchool[]
+
+  @@index([center_id], map: "teacher_center_id_idx")
+}
+
+model TeacherResearchPaper {
+  id                String        @id @default(uuid())
+  teacher_id        String
+  research_paper_id String
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @default(now()) @map("updated_at")
+  researchPaper     ResearchPaper @relation(fields: [research_paper_id], references: [id], onDelete: Cascade)
+  teacher           Teacher       @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+
+  @@index([teacher_id], map: "teacher_paper_teacher_id_idx")
+  @@index([research_paper_id], map: "teacher_paper_paper_id_idx")
+}
+
+model ResearchPaper {
+  id                    String                 @id @default(uuid())
+  title                 String                 @db.VarChar(500)
+  abstract              String?
+  publication_date      DateTime?
+  journal_name          String?
+  doi                   String?                @unique
+  url                   String?
+  createdAt             DateTime?              @map("created_at")
+  updatedAt             DateTime?              @map("updated_at")
+  teacherResearchPapers TeacherResearchPaper[]
+}
+
+model Club {
+  id            String         @id @default(uuid())
+  category      String
+  name          String
+  description   String?
+  leader_id     String
+  established   DateTime?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @default(now()) @map("updated_at")
+  leader        Student        @relation("ClubLeader", fields: [leader_id], references: [id], onDelete: Cascade)
+  coreTeams     ClubCoreTeam[]
+  clubOfficials ClubOfficial[]
+
+  @@index([leader_id], map: "club_leader_id_idx")
+}
+
+model ClubOfficial {
+  id         String   @id @default(uuid())
+  club_id    String
+  teacher_id String?
+  admin_id   String?
+  admin      Admin?   @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  club       Club     @relation(fields: [club_id], references: [id], onDelete: Cascade)
+  teacher    Teacher? @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+
+  @@index([club_id], map: "club_official_club_id_idx")
+  @@index([teacher_id], map: "club_official_teacher_id_idx")
+  @@index([admin_id], map: "club_official_admin_id_idx")
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  name        String
+  organiser   String
+  venue       String
+  type        EventType
+  start_date  DateTime
+  end_date    DateTime?
+  description String?
+  is_visible  Boolean   @default(true)
+  thumbnail   String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @map("updated_at")
+}
+
+model Policy {
+  id             String   @id @default(uuid())
+  name           String
+  pdf_url        String
+  effective_date DateTime
+  center_id      String
+  is_active      Boolean  @default(true)
+  policy_version String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+  center         Center   @relation(fields: [center_id], references: [id], onDelete: Cascade)
+
+  @@index([center_id], map: "policy_center_id_idx")
+}
+
+model ExternalDegree {
+  id             String    @id @default(uuid())
+  college_name   String
+  degree_name    String
+  specialisation String?
+  start_date     DateTime
+  end_date       DateTime?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+  students       Student[]
+}
+
+model Job {
+  id           String    @id @default(uuid())
+  title        String
+  location     String
+  jd_link      String?
+  work_mode    WorkMode
+  type         JobType
+  company_name String
+  vacancy      Int?
+  eligibility  String?
+  description  String?
+  closing_date DateTime?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @map("updated_at")
+}
+
+model Placement {
+  id           String    @id @default(uuid())
+  student_id   String
+  job_type     JobType
+  work_mode    WorkMode
+  role         String
+  company_name String
+  start_date   DateTime
+  end_date     DateTime?
+  description  String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @map("updated_at")
+  student      Student   @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "placement_student_id_idx")
+}
+
+enum AuthorRole {
+  SUPER_ADMIN
+  ADMIN
+  OPS
+  BATCHOPS
+  TEACHER
+  ASSISTANT_TEACHER
+  STUDENT
+}
+model Post {
+  id          String      @id @default(uuid())
+  content     String
+  author_id   String
+  author_type AuthorRole
+  likes       Int         @default(0)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @default(now()) @map("updated_at")
+  comments    Comment[]
+  flags       Flag[]
+  media       PostMedia[]
+}
+
+model Flag {
+  id          String   @id @default(uuid())
+  post_id     String
+  content     String
+  flagged_by  String
+  user_role   String
+  is_verified Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+  post        Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id], map: "flag_post_id_idx")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  post_id   String
+  user_id   String
+  user_role String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  post      Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id], map: "comment_post_id_idx")
+}
+
+model PostMedia {
+  id            String   @id @default(uuid())
+  type          String
+  mime_type     String
+  storage_url   String
+  thumbnail_url String?
+  duration      String?
+  post_id       String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @map("updated_at")
+  post          Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id], map: "post_media_post_id_idx")
+}
+
+model ClubCoreTeam {
+  id         String   @id @default(uuid())
+  student_id String
+  club_id    String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+  club       Club     @relation(fields: [club_id], references: [id], onDelete: Cascade)
+  student    Student  @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id], map: "core_team_student_id_idx")
+  @@index([club_id], map: "core_team_club_id_idx")
+}
+
+model ChangeLog {
+  id              String   @id @default(uuid())
+  entity_name     String
+  entity_id       String
+  action          String
+  changed_by      String
+  changed_by_type String
+  old_data        Json?
+  new_data        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum AttendanceMarkedBy {
+  SYSTEM
+  MANUAL
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum RoleType {
+  ADMIN
+  SUPER_ADMIN
+  OPS
+  BATCHOPS
+}
+
+enum ExamType {
+  END_SEM
+  PROJECT
+  FORTNIGHTLY
+  INTERNAL_ASSESSMENT
+  INTERVIEW
+}
+
+enum TeacherRole {
+  TEACHER
+  ASSISTANT_TEACHER
+}
+
+enum SchoolName{
+  SOT
+  SOM
+  SOH
+}
+
+enum EventType {
+  HACKATHON
+  SEMINAR
+  WORKSHOP
+  ACTIVITY
+  CLUB_EVENT
+}
+
+enum WorkMode {
+  HYBRID
+  ONSITE
+  REMOTE
+}
+
+enum JobType {
+  INTERNSHIP
+  FULL_TIME
+}
+
+enum Difficulty {
+  Easy
+  Medium
+  Hard
+}
