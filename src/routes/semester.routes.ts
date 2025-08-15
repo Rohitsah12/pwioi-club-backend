@@ -6,7 +6,7 @@ const semesterRoutes=Router();
 
 
 semesterRoutes.post("/",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),createSemester);
-semesterRoutes.get("/all/:divisionId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),getAllSemester);
+semesterRoutes.get("/all/:divisionId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","TEACHER"),getAllSemester);
 semesterRoutes.patch("/:semesterId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),updateSemester)
 semesterRoutes.delete("/:semesterId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),deleteSemester)
 semesterRoutes.get("/:semesterId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),getSemesterDetails)
