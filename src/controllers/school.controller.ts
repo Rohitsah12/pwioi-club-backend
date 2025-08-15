@@ -27,7 +27,6 @@ export const createSchools = catchAsync(async (req: Request<{}, {}, CreateSchool
   }
 
   if (role === AuthorRole.SUPER_ADMIN) {
-    // allowed
   } else if (role === AuthorRole.ADMIN) {
     const center = await prisma.center.findUnique({
       where: { id: centerId },
@@ -77,16 +76,17 @@ export const getAllSchools = catchAsync(async (
 ) => {
   const { centerId } = req.params;
 
-  if(!centerId){
-    throw new AppError("centerId required ", 400)
+  if (!centerId) {
+    throw new AppError("centerId required", 400);
   }
+
   const { role, sub } = req.user!;
 
   if (role === AuthorRole.SUPER_ADMIN) {
     const schools = await prisma.school.findMany({
       where: { center_id: centerId },
       orderBy: { name: "asc" },
-      select:{id:true,name:true}
+      select: { id: true, name: true }
     });
 
     return res.status(200).json({ success: true, count: schools.length, data: schools });
@@ -95,10 +95,7 @@ export const getAllSchools = catchAsync(async (
   if (role === AuthorRole.ADMIN) {
     const center = await prisma.center.findUnique({
       where: { id: centerId },
-      select: {
-        business_head: true,
-        academic_head: true
-      }
+      select: { business_head: true, academic_head: true }
     });
 
     if (!center) {
@@ -112,7 +109,30 @@ export const getAllSchools = catchAsync(async (
     const schools = await prisma.school.findMany({
       where: { center_id: centerId },
       orderBy: { name: "asc" },
-      select:{id:true,name:true}
+      select: { id: true, name: true }
+    });
+
+    return res.status(200).json({ success: true, count: schools.length, data: schools });
+  }
+
+  if (role === AuthorRole.TEACHER) {
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: sub },
+      select: { center_id: true }
+    });
+
+    if (!teacher) {
+      throw new AppError("Teacher not found", 404);
+    }
+
+    if (teacher.center_id !== centerId) {
+      throw new AppError("Not authorized to access schools of this center", 403);
+    }
+
+    const schools = await prisma.school.findMany({
+      where: { center_id: centerId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true }
     });
 
     return res.status(200).json({ success: true, count: schools.length, data: schools });
@@ -120,19 +140,25 @@ export const getAllSchools = catchAsync(async (
 
   throw new AppError("Role not permitted", 403);
 });
-
 export const deleteSchool = catchAsync(
   async (req: Request, res: Response) => {
-    const { centerId, schoolId } = req.params;
+    const { schoolId } = req.params;
 
-    if (!centerId || !schoolId) {
-      throw new AppError("CenterId and schoolId are required", 400);
+    if (!schoolId) {
+      throw new AppError("schoolId is required", 400);
     }
 
     const { role, sub } = req.user!;
 
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { id: true, center_id: true }
+    });
+
+    if (!school) throw new AppError("School not found", 404);
+
     const center = await prisma.center.findUnique({
-      where: { id: centerId },
+      where: { id: school.center_id },
       select: { business_head: true, academic_head: true }
     });
 
@@ -144,12 +170,6 @@ export const deleteSchool = catchAsync(
       }
     } else if (role !== AuthorRole.SUPER_ADMIN) {
       throw new AppError("Role not permitted to delete schools", 403);
-    }
-
-    const school = await prisma.school.findUnique({ where: { id: schoolId } });
-    if (!school) throw new AppError("School not found", 404);
-    if (school.center_id !== centerId) {
-      throw new AppError("School does not belong to the specified center", 400);
     }
 
     await prisma.school.delete({ where: { id: schoolId } });
@@ -221,5 +241,70 @@ export const getSchoolStats = catchAsync(async (
       students: studentCount,
       teachers: teacherCount
     }
+  });
+});
+
+export const updateSchool = catchAsync(async (
+  req: Request,
+  res: Response
+) => {
+  const { schoolId } = req.params;
+  const updates = req.body;
+  const { role, sub } = req.user!;
+
+  if (!schoolId) {
+    throw new AppError("schoolId is required", 400);
+  }
+
+  if (updates.name !== undefined && typeof updates.name !== "string") {
+    throw new AppError("Invalid name field", 400);
+  }
+
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { id: true, center_id: true, name: true }
+  });
+
+  if (!school) {
+    throw new AppError("School not found", 404);
+  }
+
+  if (role === AuthorRole.ADMIN) {
+    const center = await prisma.center.findUnique({
+      where: { id: school.center_id },
+      select: { business_head: true, academic_head: true }
+    });
+
+    if (!center) {
+      throw new AppError("Center not found", 404);
+    }
+
+    if (center.business_head !== sub && center.academic_head !== sub) {
+      throw new AppError("Not authorized to update this school", 403);
+    }
+  } else if (role !== AuthorRole.SUPER_ADMIN) {
+    throw new AppError("Role not permitted to update school", 403);
+  }
+
+  if (updates.name) {
+    updates.name = updates.name.trim();
+    if (updates.name === "") {
+      throw new AppError("Name cannot be empty", 400);
+    }
+  }
+
+  // Perform update
+  const updatedSchool = await prisma.school.update({
+    where: { id: schoolId },
+    data: {
+      ...updates,
+      updatedAt: new Date()
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "School updated successfully",
+    data: updatedSchool
   });
 });
