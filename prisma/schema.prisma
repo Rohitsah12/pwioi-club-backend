@@ -674,8 +674,8 @@ model Batch {
 model Semester {
   id          String     @id @default(uuid())
   number      Int
-  division    Division?  @relation // Simple inverse relation (no fields, references, or onDelete)
-  division_id String?    // FK stored on Division model
+  division    Division?  @relation 
+  division_id String?   
 
   start_date  DateTime
   end_date    DateTime?

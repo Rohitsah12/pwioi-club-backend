@@ -14,6 +14,7 @@ import likesRouter from "./routes/like.routes.js";
 import flagRoutes from "./routes/flag.routes.js";
 import schoolRoutes from "./routes/school.routes.js";
 import batchRoutes from "./routes/batch.routes.js";
+import divisionRoutes from "./routes/division.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -36,7 +37,8 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/likes', likesRouter);
 app.use('/api/flags', flagRoutes);
 app.use('/api/schools',schoolRoutes);
-app.use('/api/batches',batchRoutes)
+app.use('/api/batches',batchRoutes);
+app.use('/api/division',divisionRoutes);
 
 
 
