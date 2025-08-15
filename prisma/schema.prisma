@@ -427,6 +427,7 @@ model Student {
   phone              String             @unique
   address            String?
   is_active          Boolean            @default(true)
+  deactivatedAt      DateTime? 
   firstLoggedIn      Boolean            @default(false)
   enrollment_id      String             @unique
   device_id          String?            @unique

@@ -16,6 +16,7 @@ import schoolRoutes from "./routes/school.routes.js";
 import batchRoutes from "./routes/batch.routes.js";
 import divisionRoutes from "./routes/division.routes.js";
 import semesterRoutes from "./routes/semester.routes.js";
+import studentRoutes from "./routes/student.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -41,6 +42,7 @@ app.use('/api/schools',schoolRoutes);
 app.use('/api/batches',batchRoutes);
 app.use('/api/division',divisionRoutes);
 app.use('/api/semester',semesterRoutes)
+app.use('/api/students',studentRoutes)
 
 
 
