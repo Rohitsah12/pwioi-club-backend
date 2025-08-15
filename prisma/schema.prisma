@@ -675,7 +675,7 @@ model Semester {
   id          String     @id @default(uuid())
   number      Int
   division    Division?  @relation 
-  division_id String?   
+  division_id String   
 
   start_date  DateTime
   end_date    DateTime?
