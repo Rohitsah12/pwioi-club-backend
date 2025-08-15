@@ -433,7 +433,7 @@ model Student {
   center_id          String
   school_id          String
   batch_id           String
-  semester_id        String?
+  semester_id        String
   division_id        String
   cohort_id          String?
   degree_id          String?
@@ -462,7 +462,7 @@ model Student {
   degree             ExternalDegree?    @relation(fields: [degree_id], references: [id], onDelete: Cascade)
   division           Division           @relation(fields: [division_id], references: [id], onDelete: Cascade)
   school             School             @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  semester           Semester?          @relation(fields: [semester_id], references: [id], onDelete: Cascade)
+  semester           Semester         @relation(fields: [semester_id], references: [id], onDelete: Cascade)
   examMarks          StudentExamMarks[]
   studentLogs        StudentLog[]
   submissions        Submission[]
