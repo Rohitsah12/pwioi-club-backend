@@ -324,20 +324,20 @@ model SubmissionResult {
 }
 
 model Center {
-  id            String    @id @default(uuid())
+  id            String     @id @default(uuid())
   name          String
   location      String
-  code          Int       @unique
+  code          Int        @unique
   business_head String?
   academic_head String?
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @map("updated_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @default(now()) @map("updated_at")
   batches       Batch[]
   academicHead  Admin?     @relation("AcademicHead", fields: [academic_head], references: [id], onDelete: Cascade)
   businessHead  Admin?     @relation("BusinessHead", fields: [business_head], references: [id], onDelete: Cascade)
   cohorts       Cohort[]
   policies      Policy[]
-  divisions Division[] 
+  divisions     Division[]
   schools       School[]
   students      Student[]
   teachers      Teacher[]
@@ -366,7 +366,7 @@ model Admin {
   googleAccessToken   String?
   googleRefreshToken  String?
   googleTokenExpiry   DateTime?
-  lastLoginAt DateTime?
+  lastLoginAt         DateTime?
   createdAt           DateTime       @default(now()) @map("created_at")
   updatedAt           DateTime       @default(now()) @map("updated_at")
   role                RoleAdmin      @relation(fields: [role_id], references: [id], onDelete: Cascade)
@@ -375,6 +375,7 @@ model Admin {
   businessHeadCenters Center[]       @relation("BusinessHead")
   clubOfficials       ClubOfficial[]
 }
+
 model School {
   id             String          @id @default(uuid())
   name           SchoolName
@@ -387,8 +388,8 @@ model School {
   divisions      Division[]
   teacherSchools TeacherSchool[]
 
+  @@unique([center_id, name], map: "unique_school_name_per_center")
   @@index([center_id], map: "school_center_id_idx")
-  @@unique([center_id, name], map: "unique_school_name_per_center") 
 }
 
 model TeacherCohort {
@@ -428,7 +429,7 @@ model Student {
   phone              String             @unique
   address            String?
   is_active          Boolean            @default(true)
-  deactivatedAt      DateTime? 
+  deactivatedAt      DateTime?
   firstLoggedIn      Boolean            @default(false)
   enrollment_id      String             @unique
   device_id          String?            @unique
@@ -442,7 +443,7 @@ model Student {
   googleAccessToken  String?
   googleRefreshToken String?
   googleTokenExpiry  DateTime?
-  lastLoginAt DateTime?
+  lastLoginAt        DateTime?
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @default(now()) @map("updated_at")
   academicHistory    AcademicHistory?
@@ -464,7 +465,7 @@ model Student {
   degree             ExternalDegree?    @relation(fields: [degree_id], references: [id], onDelete: Cascade)
   division           Division           @relation(fields: [division_id], references: [id], onDelete: Cascade)
   school             School             @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  semester           Semester         @relation(fields: [semester_id], references: [id], onDelete: Cascade)
+  semester           Semester           @relation(fields: [semester_id], references: [id], onDelete: Cascade)
   examMarks          StudentExamMarks[]
   studentLogs        StudentLog[]
   submissions        Submission[]
@@ -607,29 +608,26 @@ model Cohort {
 }
 
 model Division {
-  id               String    @id @default(uuid())
-  code             String    @unique
+  id               String  @id @default(uuid())
+  code             String  @unique
   center_id        String
   school_id        String
   batch_id         String
   current_semester String? @unique
 
-  start_date       DateTime
-  end_date         DateTime?
+  start_date DateTime
+  end_date   DateTime?
 
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @default(now()) @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
 
-  classes          Class[]
+  classes  Class[]
+  batch    Batch     @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  semester Semester? @relation(fields: [current_semester], references: [id], onDelete: Cascade)
+  students Student[]
 
-  batch            Batch     @relation(fields: [batch_id], references: [id], onDelete: Cascade)
-
-  semester         Semester? @relation(fields: [current_semester], references: [id], onDelete: Cascade)
-
-  students         Student[]
-
-  center           Center    @relation(fields: [center_id], references: [id], onDelete: Cascade)
-  school           School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  center Center @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
 
   @@index([batch_id], map: "division_batch_id_idx")
   @@index([current_semester], map: "division_semester_id_idx")
@@ -655,38 +653,38 @@ model PersonalDetail {
 }
 
 model Batch {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  center_id   String
-  school_id   String
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @map("updated_at")
+  id        String   @id @default(uuid())
+  name      String   @unique
+  center_id String
+  school_id String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
 
-  center      Center    @relation(fields: [center_id], references: [id], onDelete: Cascade)
-  school      School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  center Center @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
 
-  contests    BatchContest[]
-  divisions   Division[]
-  students    Student[]
+  contests  BatchContest[]
+  divisions Division[]
+  students  Student[]
 
   @@index([center_id], map: "batch_center_id_idx")
   @@index([school_id], map: "batch_school_id_idx")
 }
 
 model Semester {
-  id          String     @id @default(uuid())
+  id          String    @id @default(uuid())
   number      Int
-  division    Division?  @relation 
-  division_id String   
+  division    Division? @relation
+  division_id String
 
-  start_date  DateTime
-  end_date    DateTime?
+  start_date DateTime
+  end_date   DateTime?
 
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @default(now()) @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
 
-  students    Student[]
-  subjects    Subject[]
+  students Student[]
+  subjects Subject[]
 
   @@index([division_id], map: "semester_division_id_idx")
 }
@@ -796,7 +794,7 @@ model Teacher {
   googleAccessToken  String?
   googleRefreshToken String?
   googleTokenExpiry  DateTime?
-  lastLoginAt DateTime?
+  lastLoginAt        DateTime?
   createdAt          DateTime               @default(now()) @map("created_at")
   updatedAt          DateTime               @default(now()) @map("updated_at")
   classes            Class[]
@@ -956,6 +954,7 @@ enum AuthorRole {
   ASSISTANT_TEACHER
   STUDENT
 }
+
 model Post {
   id          String      @id @default(uuid())
   content     String
@@ -1071,7 +1070,7 @@ enum TeacherRole {
   ASSISTANT_TEACHER
 }
 
-enum SchoolName{
+enum SchoolName {
   SOT
   SOM
   SOH

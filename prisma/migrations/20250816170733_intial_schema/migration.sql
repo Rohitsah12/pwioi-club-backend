@@ -1,4 +1,7 @@
 -- CreateEnum
+CREATE TYPE "public"."AuthorRole" AS ENUM ('SUPER_ADMIN', 'ADMIN', 'OPS', 'BATCHOPS', 'TEACHER', 'ASSISTANT_TEACHER', 'STUDENT');
+
+-- CreateEnum
 CREATE TYPE "public"."AttendanceStatus" AS ENUM ('PRESENT', 'ABSENT');
 
 -- CreateEnum
@@ -15,6 +18,9 @@ CREATE TYPE "public"."ExamType" AS ENUM ('END_SEM', 'PROJECT', 'FORTNIGHTLY', 'I
 
 -- CreateEnum
 CREATE TYPE "public"."TeacherRole" AS ENUM ('TEACHER', 'ASSISTANT_TEACHER');
+
+-- CreateEnum
+CREATE TYPE "public"."SchoolName" AS ENUM ('SOT', 'SOM', 'SOH');
 
 -- CreateEnum
 CREATE TYPE "public"."EventType" AS ENUM ('HACKATHON', 'SEMINAR', 'WORKSHOP', 'ACTIVITY', 'CLUB_EVENT');
@@ -291,8 +297,8 @@ CREATE TABLE "public"."Center" (
     "name" TEXT NOT NULL,
     "location" TEXT NOT NULL,
     "code" INTEGER NOT NULL,
-    "business_head" TEXT NOT NULL,
-    "academic_head" TEXT NOT NULL,
+    "business_head" TEXT,
+    "academic_head" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -322,6 +328,7 @@ CREATE TABLE "public"."Admin" (
     "googleAccessToken" TEXT,
     "googleRefreshToken" TEXT,
     "googleTokenExpiry" TIMESTAMP(3),
+    "lastLoginAt" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -331,7 +338,7 @@ CREATE TABLE "public"."Admin" (
 -- CreateTable
 CREATE TABLE "public"."School" (
     "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
+    "name" "public"."SchoolName" NOT NULL,
     "center_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -373,19 +380,21 @@ CREATE TABLE "public"."Student" (
     "phone" TEXT NOT NULL,
     "address" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "deactivatedAt" TIMESTAMP(3),
     "firstLoggedIn" BOOLEAN NOT NULL DEFAULT false,
     "enrollment_id" TEXT NOT NULL,
     "device_id" TEXT,
     "center_id" TEXT NOT NULL,
     "school_id" TEXT NOT NULL,
     "batch_id" TEXT NOT NULL,
-    "semester_id" TEXT,
+    "semester_id" TEXT NOT NULL,
     "division_id" TEXT NOT NULL,
     "cohort_id" TEXT,
     "degree_id" TEXT,
     "googleAccessToken" TEXT,
     "googleRefreshToken" TEXT,
     "googleTokenExpiry" TIMESTAMP(3),
+    "lastLoginAt" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -523,8 +532,12 @@ CREATE TABLE "public"."Cohort" (
 CREATE TABLE "public"."Division" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
+    "center_id" TEXT NOT NULL,
+    "school_id" TEXT NOT NULL,
     "batch_id" TEXT NOT NULL,
     "current_semester" TEXT,
+    "start_date" TIMESTAMP(3) NOT NULL,
+    "end_date" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -554,9 +567,6 @@ CREATE TABLE "public"."Batch" (
     "name" TEXT NOT NULL,
     "center_id" TEXT NOT NULL,
     "school_id" TEXT NOT NULL,
-    "current_semester" TEXT NOT NULL,
-    "start_date" TIMESTAMP(3) NOT NULL,
-    "end_date" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -567,7 +577,7 @@ CREATE TABLE "public"."Batch" (
 CREATE TABLE "public"."Semester" (
     "id" TEXT NOT NULL,
     "number" INTEGER NOT NULL,
-    "batch_id" TEXT NOT NULL,
+    "division_id" TEXT NOT NULL,
     "start_date" TIMESTAMP(3) NOT NULL,
     "end_date" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -672,6 +682,7 @@ CREATE TABLE "public"."Teacher" (
     "googleAccessToken" TEXT,
     "googleRefreshToken" TEXT,
     "googleTokenExpiry" TIMESTAMP(3),
+    "lastLoginAt" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -816,7 +827,7 @@ CREATE TABLE "public"."Post" (
     "id" TEXT NOT NULL,
     "content" TEXT NOT NULL,
     "author_id" TEXT NOT NULL,
-    "author_type" TEXT NOT NULL,
+    "author_type" "public"."AuthorRole" NOT NULL,
     "likes" INTEGER NOT NULL DEFAULT 0,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1025,6 +1036,9 @@ CREATE INDEX "center_business_head_idx" ON "public"."Center"("business_head");
 CREATE INDEX "center_academic_head_idx" ON "public"."Center"("academic_head");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "RoleAdmin_role_key" ON "public"."RoleAdmin"("role");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Admin_email_key" ON "public"."Admin"("email");
 
 -- CreateIndex
@@ -1032,6 +1046,9 @@ CREATE UNIQUE INDEX "Admin_phone_key" ON "public"."Admin"("phone");
 
 -- CreateIndex
 CREATE INDEX "school_center_id_idx" ON "public"."School"("center_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "unique_school_name_per_center" ON "public"."School"("center_id", "name");
 
 -- CreateIndex
 CREATE INDEX "teacher_cohort_teacher_id_idx" ON "public"."TeacherCohort"("teacher_id");
@@ -1097,10 +1114,19 @@ CREATE INDEX "cohort_center_id_idx" ON "public"."Cohort"("center_id");
 CREATE UNIQUE INDEX "Division_code_key" ON "public"."Division"("code");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Division_current_semester_key" ON "public"."Division"("current_semester");
+
+-- CreateIndex
 CREATE INDEX "division_batch_id_idx" ON "public"."Division"("batch_id");
 
 -- CreateIndex
 CREATE INDEX "division_semester_id_idx" ON "public"."Division"("current_semester");
+
+-- CreateIndex
+CREATE INDEX "division_center_id_idx" ON "public"."Division"("center_id");
+
+-- CreateIndex
+CREATE INDEX "division_school_id_idx" ON "public"."Division"("school_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PersonalDetail_student_id_key" ON "public"."PersonalDetail"("student_id");
@@ -1121,10 +1147,7 @@ CREATE INDEX "batch_center_id_idx" ON "public"."Batch"("center_id");
 CREATE INDEX "batch_school_id_idx" ON "public"."Batch"("school_id");
 
 -- CreateIndex
-CREATE INDEX "batch_semester_id_idx" ON "public"."Batch"("current_semester");
-
--- CreateIndex
-CREATE INDEX "semester_batch_id_idx" ON "public"."Semester"("batch_id");
+CREATE INDEX "semester_division_id_idx" ON "public"."Semester"("division_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Mentor_email_key" ON "public"."Mentor"("email");
@@ -1217,19 +1240,16 @@ CREATE INDEX "core_team_club_id_idx" ON "public"."ClubCoreTeam"("club_id");
 ALTER TABLE "public"."Beacon" ADD CONSTRAINT "Beacon_room_id_fkey" FOREIGN KEY ("room_id") REFERENCES "public"."Room"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Class" ADD CONSTRAINT "Class_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."Subject"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."Class" ADD CONSTRAINT "Class_division_id_fkey" FOREIGN KEY ("division_id") REFERENCES "public"."Division"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Class" ADD CONSTRAINT "Class_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Class" ADD CONSTRAINT "Class_room_id_fkey" FOREIGN KEY ("room_id") REFERENCES "public"."Room"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Scan" ADD CONSTRAINT "Scan_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Class" ADD CONSTRAINT "Class_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."Subject"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Class" ADD CONSTRAINT "Class_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Scan" ADD CONSTRAINT "Scan_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."Class"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1241,22 +1261,25 @@ ALTER TABLE "public"."Scan" ADD CONSTRAINT "Scan_detected_beacon_id_fkey" FOREIG
 ALTER TABLE "public"."Scan" ADD CONSTRAINT "Scan_scan_window_id_fkey" FOREIGN KEY ("scan_window_id") REFERENCES "public"."ScanWindow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."ScanWindow" ADD CONSTRAINT "ScanWindow_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Scan" ADD CONSTRAINT "Scan_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."ScanWindow" ADD CONSTRAINT "ScanWindow_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."Class"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Attendance" ADD CONSTRAINT "Attendance_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ScanWindow" ADD CONSTRAINT "ScanWindow_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Attendance" ADD CONSTRAINT "Attendance_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."Class"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."WindowScanMapping" ADD CONSTRAINT "WindowScanMapping_scan_window_id_fkey" FOREIGN KEY ("scan_window_id") REFERENCES "public"."ScanWindow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Attendance" ADD CONSTRAINT "Attendance_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."WindowScanMapping" ADD CONSTRAINT "WindowScanMapping_scan_id_fkey" FOREIGN KEY ("scan_id") REFERENCES "public"."Scan"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."WindowScanMapping" ADD CONSTRAINT "WindowScanMapping_scan_window_id_fkey" FOREIGN KEY ("scan_window_id") REFERENCES "public"."ScanWindow"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Problem" ADD CONSTRAINT "Problem_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1271,10 +1294,10 @@ ALTER TABLE "public"."ProblemTag" ADD CONSTRAINT "ProblemTag_tag_id_fkey" FOREIG
 ALTER TABLE "public"."TestCase" ADD CONSTRAINT "TestCase_problem_id_fkey" FOREIGN KEY ("problem_id") REFERENCES "public"."Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."ProblemModerator" ADD CONSTRAINT "ProblemModerator_problem_id_fkey" FOREIGN KEY ("problem_id") REFERENCES "public"."Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ProblemModerator" ADD CONSTRAINT "ProblemModerator_moderator_id_fkey" FOREIGN KEY ("moderator_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."ProblemModerator" ADD CONSTRAINT "ProblemModerator_moderator_id_fkey" FOREIGN KEY ("moderator_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ProblemModerator" ADD CONSTRAINT "ProblemModerator_problem_id_fkey" FOREIGN KEY ("problem_id") REFERENCES "public"."Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Contest" ADD CONSTRAINT "Contest_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1286,10 +1309,10 @@ ALTER TABLE "public"."BatchContest" ADD CONSTRAINT "BatchContest_batch_id_fkey" 
 ALTER TABLE "public"."BatchContest" ADD CONSTRAINT "BatchContest_contest_id_fkey" FOREIGN KEY ("contest_id") REFERENCES "public"."Contest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."AllowedLanguage" ADD CONSTRAINT "AllowedLanguage_language_id_fkey" FOREIGN KEY ("language_id") REFERENCES "public"."ProgrammingLanguage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."AllowedLanguage" ADD CONSTRAINT "AllowedLanguage_contest_id_fkey" FOREIGN KEY ("contest_id") REFERENCES "public"."Contest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."AllowedLanguage" ADD CONSTRAINT "AllowedLanguage_contest_id_fkey" FOREIGN KEY ("contest_id") REFERENCES "public"."Contest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."AllowedLanguage" ADD CONSTRAINT "AllowedLanguage_language_id_fkey" FOREIGN KEY ("language_id") REFERENCES "public"."ProgrammingLanguage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."ContestModerator" ADD CONSTRAINT "ContestModerator_contest_id_fkey" FOREIGN KEY ("contest_id") REFERENCES "public"."Contest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1304,19 +1327,22 @@ ALTER TABLE "public"."ContestProblem" ADD CONSTRAINT "ContestProblem_contest_id_
 ALTER TABLE "public"."ContestProblem" ADD CONSTRAINT "ContestProblem_problem_id_fkey" FOREIGN KEY ("problem_id") REFERENCES "public"."Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Submission" ADD CONSTRAINT "Submission_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Submission" ADD CONSTRAINT "Submission_problem_id_fkey" FOREIGN KEY ("problem_id") REFERENCES "public"."Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."Submission" ADD CONSTRAINT "Submission_contest_id_fkey" FOREIGN KEY ("contest_id") REFERENCES "public"."Contest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Submission" ADD CONSTRAINT "Submission_language_id_fkey" FOREIGN KEY ("language_id") REFERENCES "public"."ProgrammingLanguage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."Submission" ADD CONSTRAINT "Submission_problem_id_fkey" FOREIGN KEY ("problem_id") REFERENCES "public"."Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."Submission" ADD CONSTRAINT "Submission_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "public"."SubmissionStatus"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Submission" ADD CONSTRAINT "Submission_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."SubmissionResult" ADD CONSTRAINT "SubmissionResult_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "public"."SubmissionStatus"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."SubmissionResult" ADD CONSTRAINT "SubmissionResult_submission_id_fkey" FOREIGN KEY ("submission_id") REFERENCES "public"."Submission"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1325,13 +1351,10 @@ ALTER TABLE "public"."SubmissionResult" ADD CONSTRAINT "SubmissionResult_submiss
 ALTER TABLE "public"."SubmissionResult" ADD CONSTRAINT "SubmissionResult_test_case_id_fkey" FOREIGN KEY ("test_case_id") REFERENCES "public"."TestCase"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."SubmissionResult" ADD CONSTRAINT "SubmissionResult_status_id_fkey" FOREIGN KEY ("status_id") REFERENCES "public"."SubmissionStatus"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Center" ADD CONSTRAINT "Center_academic_head_fkey" FOREIGN KEY ("academic_head") REFERENCES "public"."Admin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Center" ADD CONSTRAINT "Center_business_head_fkey" FOREIGN KEY ("business_head") REFERENCES "public"."Admin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Center" ADD CONSTRAINT "Center_academic_head_fkey" FOREIGN KEY ("academic_head") REFERENCES "public"."Admin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Admin" ADD CONSTRAINT "Admin_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "public"."RoleAdmin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1340,37 +1363,37 @@ ALTER TABLE "public"."Admin" ADD CONSTRAINT "Admin_role_id_fkey" FOREIGN KEY ("r
 ALTER TABLE "public"."School" ADD CONSTRAINT "School_center_id_fkey" FOREIGN KEY ("center_id") REFERENCES "public"."Center"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."TeacherCohort" ADD CONSTRAINT "TeacherCohort_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."TeacherCohort" ADD CONSTRAINT "TeacherCohort_cohort_id_fkey" FOREIGN KEY ("cohort_id") REFERENCES "public"."Cohort"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."TeacherSchool" ADD CONSTRAINT "TeacherSchool_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."TeacherCohort" ADD CONSTRAINT "TeacherCohort_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."TeacherSchool" ADD CONSTRAINT "TeacherSchool_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."School"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_center_id_fkey" FOREIGN KEY ("center_id") REFERENCES "public"."Center"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."School"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."TeacherSchool" ADD CONSTRAINT "TeacherSchool_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_batch_id_fkey" FOREIGN KEY ("batch_id") REFERENCES "public"."Batch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_semester_id_fkey" FOREIGN KEY ("semester_id") REFERENCES "public"."Semester"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_division_id_fkey" FOREIGN KEY ("division_id") REFERENCES "public"."Division"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_center_id_fkey" FOREIGN KEY ("center_id") REFERENCES "public"."Center"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_cohort_id_fkey" FOREIGN KEY ("cohort_id") REFERENCES "public"."Cohort"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_degree_id_fkey" FOREIGN KEY ("degree_id") REFERENCES "public"."ExternalDegree"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_division_id_fkey" FOREIGN KEY ("division_id") REFERENCES "public"."Division"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."School"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Student" ADD CONSTRAINT "Student_semester_id_fkey" FOREIGN KEY ("semester_id") REFERENCES "public"."Semester"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Behaviour" ADD CONSTRAINT "Behaviour_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "public"."Admin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1394,13 +1417,13 @@ ALTER TABLE "public"."Certification" ADD CONSTRAINT "Certification_student_id_fk
 ALTER TABLE "public"."AcademicHistory" ADD CONSTRAINT "AcademicHistory_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."AcademicHistory" ADD CONSTRAINT "AcademicHistory_undergraduate_fkey" FOREIGN KEY ("undergraduate") REFERENCES "public"."Education"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."AcademicHistory" ADD CONSTRAINT "AcademicHistory_x_education_fkey" FOREIGN KEY ("x_education") REFERENCES "public"."Education"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."AcademicHistory" ADD CONSTRAINT "AcademicHistory_xii_education_fkey" FOREIGN KEY ("xii_education") REFERENCES "public"."Education"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."AcademicHistory" ADD CONSTRAINT "AcademicHistory_undergraduate_fkey" FOREIGN KEY ("undergraduate") REFERENCES "public"."Education"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Achievement" ADD CONSTRAINT "Achievement_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1415,6 +1438,12 @@ ALTER TABLE "public"."Division" ADD CONSTRAINT "Division_batch_id_fkey" FOREIGN 
 ALTER TABLE "public"."Division" ADD CONSTRAINT "Division_current_semester_fkey" FOREIGN KEY ("current_semester") REFERENCES "public"."Semester"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."Division" ADD CONSTRAINT "Division_center_id_fkey" FOREIGN KEY ("center_id") REFERENCES "public"."Center"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Division" ADD CONSTRAINT "Division_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."School"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."PersonalDetail" ADD CONSTRAINT "PersonalDetail_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1422,12 +1451,6 @@ ALTER TABLE "public"."Batch" ADD CONSTRAINT "Batch_center_id_fkey" FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE "public"."Batch" ADD CONSTRAINT "Batch_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."School"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Batch" ADD CONSTRAINT "Batch_current_semester_fkey" FOREIGN KEY ("current_semester") REFERENCES "public"."Semester"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Semester" ADD CONSTRAINT "Semester_batch_id_fkey" FOREIGN KEY ("batch_id") REFERENCES "public"."Batch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Subject" ADD CONSTRAINT "Subject_semester_id_fkey" FOREIGN KEY ("semester_id") REFERENCES "public"."Semester"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1439,16 +1462,16 @@ ALTER TABLE "public"."Subject" ADD CONSTRAINT "Subject_teacher_id_fkey" FOREIGN 
 ALTER TABLE "public"."Exam" ADD CONSTRAINT "Exam_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."Subject"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."StudentExamMarks" ADD CONSTRAINT "StudentExamMarks_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."StudentExamMarks" ADD CONSTRAINT "StudentExamMarks_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."Subject"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."StudentExamMarks" ADD CONSTRAINT "StudentExamMarks_exam_id_fkey" FOREIGN KEY ("exam_id") REFERENCES "public"."Exam"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."StudentExamMarks" ADD CONSTRAINT "StudentExamMarks_graded_by_fkey" FOREIGN KEY ("graded_by") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."StudentExamMarks" ADD CONSTRAINT "StudentExamMarks_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."StudentExamMarks" ADD CONSTRAINT "StudentExamMarks_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."Subject"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."TeacherExperience" ADD CONSTRAINT "TeacherExperience_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1457,22 +1480,22 @@ ALTER TABLE "public"."TeacherExperience" ADD CONSTRAINT "TeacherExperience_teach
 ALTER TABLE "public"."Teacher" ADD CONSTRAINT "Teacher_center_id_fkey" FOREIGN KEY ("center_id") REFERENCES "public"."Center"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."TeacherResearchPaper" ADD CONSTRAINT "TeacherResearchPaper_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."TeacherResearchPaper" ADD CONSTRAINT "TeacherResearchPaper_research_paper_id_fkey" FOREIGN KEY ("research_paper_id") REFERENCES "public"."ResearchPaper"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."TeacherResearchPaper" ADD CONSTRAINT "TeacherResearchPaper_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."Club" ADD CONSTRAINT "Club_leader_id_fkey" FOREIGN KEY ("leader_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."ClubOfficial" ADD CONSTRAINT "ClubOfficial_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "public"."Admin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."ClubOfficial" ADD CONSTRAINT "ClubOfficial_club_id_fkey" FOREIGN KEY ("club_id") REFERENCES "public"."Club"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."ClubOfficial" ADD CONSTRAINT "ClubOfficial_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."Teacher"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."ClubOfficial" ADD CONSTRAINT "ClubOfficial_admin_id_fkey" FOREIGN KEY ("admin_id") REFERENCES "public"."Admin"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Policy" ADD CONSTRAINT "Policy_center_id_fkey" FOREIGN KEY ("center_id") REFERENCES "public"."Center"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1490,7 +1513,7 @@ ALTER TABLE "public"."Comment" ADD CONSTRAINT "Comment_post_id_fkey" FOREIGN KEY
 ALTER TABLE "public"."PostMedia" ADD CONSTRAINT "PostMedia_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."ClubCoreTeam" ADD CONSTRAINT "ClubCoreTeam_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ClubCoreTeam" ADD CONSTRAINT "ClubCoreTeam_club_id_fkey" FOREIGN KEY ("club_id") REFERENCES "public"."Club"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."ClubCoreTeam" ADD CONSTRAINT "ClubCoreTeam_club_id_fkey" FOREIGN KEY ("club_id") REFERENCES "public"."Club"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ClubCoreTeam" ADD CONSTRAINT "ClubCoreTeam_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."Student"("id") ON DELETE CASCADE ON UPDATE CASCADE;
