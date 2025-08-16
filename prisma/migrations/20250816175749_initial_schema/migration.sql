@@ -36,7 +36,7 @@ CREATE TYPE "public"."Difficulty" AS ENUM ('Easy', 'Medium', 'Hard');
 
 -- CreateTable
 CREATE TABLE "public"."Beacon" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "major" INTEGER NOT NULL,
     "minor" INTEGER NOT NULL,
     "room_id" TEXT NOT NULL,
@@ -48,7 +48,8 @@ CREATE TABLE "public"."Beacon" (
 
 -- CreateTable
 CREATE TABLE "public"."Class" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
+    "lecture_number" TEXT NOT NULL,
     "subject_id" TEXT NOT NULL,
     "division_id" TEXT NOT NULL,
     "teacher_id" TEXT NOT NULL,
@@ -63,7 +64,7 @@ CREATE TABLE "public"."Class" (
 
 -- CreateTable
 CREATE TABLE "public"."Scan" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "class_id" TEXT NOT NULL,
     "detected_beacon_id" TEXT NOT NULL,
@@ -77,7 +78,7 @@ CREATE TABLE "public"."Scan" (
 
 -- CreateTable
 CREATE TABLE "public"."ScanWindow" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "class_id" TEXT NOT NULL,
     "is_processed" BOOLEAN NOT NULL,
@@ -89,7 +90,7 @@ CREATE TABLE "public"."ScanWindow" (
 
 -- CreateTable
 CREATE TABLE "public"."Attendance" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "class_id" TEXT NOT NULL,
     "status" "public"."AttendanceStatus" NOT NULL,
@@ -103,7 +104,7 @@ CREATE TABLE "public"."Attendance" (
 
 -- CreateTable
 CREATE TABLE "public"."WindowScanMapping" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "scan_window_id" TEXT NOT NULL,
     "scan_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -114,7 +115,7 @@ CREATE TABLE "public"."WindowScanMapping" (
 
 -- CreateTable
 CREATE TABLE "public"."Room" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -124,7 +125,7 @@ CREATE TABLE "public"."Room" (
 
 -- CreateTable
 CREATE TABLE "public"."Problem" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "title" VARCHAR(200) NOT NULL,
     "problem_statement" TEXT NOT NULL,
     "constraints" VARCHAR(200),
@@ -140,7 +141,7 @@ CREATE TABLE "public"."Problem" (
 
 -- CreateTable
 CREATE TABLE "public"."ProblemTag" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "problem_id" TEXT NOT NULL,
     "tag_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -150,7 +151,7 @@ CREATE TABLE "public"."ProblemTag" (
 
 -- CreateTable
 CREATE TABLE "public"."Tag" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" VARCHAR(50) NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -160,7 +161,7 @@ CREATE TABLE "public"."Tag" (
 
 -- CreateTable
 CREATE TABLE "public"."TestCase" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "problem_id" TEXT NOT NULL,
     "input" VARCHAR(200) NOT NULL,
     "expected_output" VARCHAR(200) NOT NULL,
@@ -175,7 +176,7 @@ CREATE TABLE "public"."TestCase" (
 
 -- CreateTable
 CREATE TABLE "public"."ProblemModerator" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "problem_id" TEXT NOT NULL,
     "moderator_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -186,7 +187,7 @@ CREATE TABLE "public"."ProblemModerator" (
 
 -- CreateTable
 CREATE TABLE "public"."Contest" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "title" VARCHAR(200) NOT NULL,
     "description" TEXT,
     "start_time" TIMESTAMP(3) NOT NULL,
@@ -201,7 +202,7 @@ CREATE TABLE "public"."Contest" (
 
 -- CreateTable
 CREATE TABLE "public"."BatchContest" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "batch_id" TEXT NOT NULL,
     "contest_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -212,7 +213,7 @@ CREATE TABLE "public"."BatchContest" (
 
 -- CreateTable
 CREATE TABLE "public"."ProgrammingLanguage" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" VARCHAR(200) NOT NULL,
     "judge0_code" INTEGER NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -223,7 +224,7 @@ CREATE TABLE "public"."ProgrammingLanguage" (
 
 -- CreateTable
 CREATE TABLE "public"."AllowedLanguage" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "language_id" TEXT NOT NULL,
     "contest_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -234,7 +235,7 @@ CREATE TABLE "public"."AllowedLanguage" (
 
 -- CreateTable
 CREATE TABLE "public"."ContestModerator" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "contest_id" TEXT NOT NULL,
     "moderator_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -245,7 +246,7 @@ CREATE TABLE "public"."ContestModerator" (
 
 -- CreateTable
 CREATE TABLE "public"."ContestProblem" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "contest_id" TEXT NOT NULL,
     "problem_id" TEXT NOT NULL,
     "points" INTEGER NOT NULL DEFAULT 100,
@@ -257,7 +258,7 @@ CREATE TABLE "public"."ContestProblem" (
 
 -- CreateTable
 CREATE TABLE "public"."Submission" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "user_id" TEXT NOT NULL,
     "problem_id" TEXT NOT NULL,
     "contest_id" TEXT,
@@ -273,7 +274,7 @@ CREATE TABLE "public"."Submission" (
 
 -- CreateTable
 CREATE TABLE "public"."SubmissionStatus" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" VARCHAR(200) NOT NULL,
 
     CONSTRAINT "SubmissionStatus_pkey" PRIMARY KEY ("id")
@@ -281,7 +282,7 @@ CREATE TABLE "public"."SubmissionStatus" (
 
 -- CreateTable
 CREATE TABLE "public"."SubmissionResult" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "submission_id" TEXT NOT NULL,
     "test_case_id" TEXT NOT NULL,
     "status_id" TEXT NOT NULL,
@@ -293,7 +294,7 @@ CREATE TABLE "public"."SubmissionResult" (
 
 -- CreateTable
 CREATE TABLE "public"."Center" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "location" TEXT NOT NULL,
     "code" INTEGER NOT NULL,
@@ -307,7 +308,7 @@ CREATE TABLE "public"."Center" (
 
 -- CreateTable
 CREATE TABLE "public"."RoleAdmin" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "role" "public"."RoleType" NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -317,7 +318,7 @@ CREATE TABLE "public"."RoleAdmin" (
 
 -- CreateTable
 CREATE TABLE "public"."Admin" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
@@ -337,7 +338,7 @@ CREATE TABLE "public"."Admin" (
 
 -- CreateTable
 CREATE TABLE "public"."School" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" "public"."SchoolName" NOT NULL,
     "center_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -348,7 +349,7 @@ CREATE TABLE "public"."School" (
 
 -- CreateTable
 CREATE TABLE "public"."TeacherCohort" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "teacher_id" TEXT NOT NULL,
     "cohort_id" TEXT NOT NULL,
     "specialisation" TEXT NOT NULL,
@@ -360,7 +361,7 @@ CREATE TABLE "public"."TeacherCohort" (
 
 -- CreateTable
 CREATE TABLE "public"."TeacherSchool" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "teacher_id" TEXT NOT NULL,
     "school_id" TEXT NOT NULL,
     "specialisation" TEXT NOT NULL,
@@ -372,7 +373,7 @@ CREATE TABLE "public"."TeacherSchool" (
 
 -- CreateTable
 CREATE TABLE "public"."Student" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "googleId" TEXT,
@@ -403,7 +404,7 @@ CREATE TABLE "public"."Student" (
 
 -- CreateTable
 CREATE TABLE "public"."Behaviour" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "admin_id" TEXT NOT NULL,
     "action" TEXT NOT NULL,
     "student_id" TEXT NOT NULL,
@@ -416,7 +417,7 @@ CREATE TABLE "public"."Behaviour" (
 
 -- CreateTable
 CREATE TABLE "public"."SocialLink" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "platform" TEXT NOT NULL,
     "link" TEXT NOT NULL,
@@ -428,7 +429,7 @@ CREATE TABLE "public"."SocialLink" (
 
 -- CreateTable
 CREATE TABLE "public"."StudentLog" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "action" TEXT NOT NULL,
     "old_data" JSONB,
@@ -443,7 +444,7 @@ CREATE TABLE "public"."StudentLog" (
 
 -- CreateTable
 CREATE TABLE "public"."Project" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
@@ -460,7 +461,7 @@ CREATE TABLE "public"."Project" (
 
 -- CreateTable
 CREATE TABLE "public"."Certification" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "organisation" TEXT NOT NULL,
@@ -475,7 +476,7 @@ CREATE TABLE "public"."Certification" (
 
 -- CreateTable
 CREATE TABLE "public"."Education" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "institution" TEXT NOT NULL,
     "degree" TEXT NOT NULL,
     "field_of_study" TEXT NOT NULL,
@@ -490,7 +491,7 @@ CREATE TABLE "public"."Education" (
 
 -- CreateTable
 CREATE TABLE "public"."AcademicHistory" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "x_education" TEXT,
     "xii_education" TEXT,
@@ -503,7 +504,7 @@ CREATE TABLE "public"."AcademicHistory" (
 
 -- CreateTable
 CREATE TABLE "public"."Achievement" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
@@ -517,7 +518,7 @@ CREATE TABLE "public"."Achievement" (
 
 -- CreateTable
 CREATE TABLE "public"."Cohort" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "center_id" TEXT NOT NULL,
     "start_date" TIMESTAMP(3) NOT NULL,
@@ -530,7 +531,7 @@ CREATE TABLE "public"."Cohort" (
 
 -- CreateTable
 CREATE TABLE "public"."Division" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "code" TEXT NOT NULL,
     "center_id" TEXT NOT NULL,
     "school_id" TEXT NOT NULL,
@@ -546,7 +547,7 @@ CREATE TABLE "public"."Division" (
 
 -- CreateTable
 CREATE TABLE "public"."PersonalDetail" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "personal_email" TEXT NOT NULL,
     "fathers_name" TEXT,
@@ -563,7 +564,7 @@ CREATE TABLE "public"."PersonalDetail" (
 
 -- CreateTable
 CREATE TABLE "public"."Batch" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "center_id" TEXT NOT NULL,
     "school_id" TEXT NOT NULL,
@@ -575,7 +576,7 @@ CREATE TABLE "public"."Batch" (
 
 -- CreateTable
 CREATE TABLE "public"."Semester" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "number" INTEGER NOT NULL,
     "division_id" TEXT NOT NULL,
     "start_date" TIMESTAMP(3) NOT NULL,
@@ -588,7 +589,7 @@ CREATE TABLE "public"."Semester" (
 
 -- CreateTable
 CREATE TABLE "public"."Mentor" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
@@ -603,7 +604,7 @@ CREATE TABLE "public"."Mentor" (
 
 -- CreateTable
 CREATE TABLE "public"."Subject" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "semester_id" TEXT NOT NULL,
     "credits" INTEGER NOT NULL,
@@ -617,7 +618,7 @@ CREATE TABLE "public"."Subject" (
 
 -- CreateTable
 CREATE TABLE "public"."Exam" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "weightage" DOUBLE PRECISION NOT NULL,
     "full_marks" DOUBLE PRECISION NOT NULL,
@@ -633,7 +634,7 @@ CREATE TABLE "public"."Exam" (
 
 -- CreateTable
 CREATE TABLE "public"."StudentExamMarks" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "subject_id" TEXT NOT NULL,
     "exam_id" TEXT NOT NULL,
@@ -650,7 +651,7 @@ CREATE TABLE "public"."StudentExamMarks" (
 
 -- CreateTable
 CREATE TABLE "public"."TeacherExperience" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "title" TEXT NOT NULL,
     "company_name" TEXT NOT NULL,
     "location" TEXT,
@@ -667,7 +668,7 @@ CREATE TABLE "public"."TeacherExperience" (
 
 -- CreateTable
 CREATE TABLE "public"."Teacher" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
@@ -691,7 +692,7 @@ CREATE TABLE "public"."Teacher" (
 
 -- CreateTable
 CREATE TABLE "public"."TeacherResearchPaper" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "teacher_id" TEXT NOT NULL,
     "research_paper_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -702,7 +703,7 @@ CREATE TABLE "public"."TeacherResearchPaper" (
 
 -- CreateTable
 CREATE TABLE "public"."ResearchPaper" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "title" VARCHAR(500) NOT NULL,
     "abstract" TEXT,
     "publication_date" TIMESTAMP(3),
@@ -717,7 +718,7 @@ CREATE TABLE "public"."ResearchPaper" (
 
 -- CreateTable
 CREATE TABLE "public"."Club" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "category" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
@@ -731,7 +732,7 @@ CREATE TABLE "public"."Club" (
 
 -- CreateTable
 CREATE TABLE "public"."ClubOfficial" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "club_id" TEXT NOT NULL,
     "teacher_id" TEXT,
     "admin_id" TEXT,
@@ -741,7 +742,7 @@ CREATE TABLE "public"."ClubOfficial" (
 
 -- CreateTable
 CREATE TABLE "public"."Event" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "organiser" TEXT NOT NULL,
     "venue" TEXT NOT NULL,
@@ -759,7 +760,7 @@ CREATE TABLE "public"."Event" (
 
 -- CreateTable
 CREATE TABLE "public"."Policy" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "pdf_url" TEXT NOT NULL,
     "effective_date" TIMESTAMP(3) NOT NULL,
@@ -774,7 +775,7 @@ CREATE TABLE "public"."Policy" (
 
 -- CreateTable
 CREATE TABLE "public"."ExternalDegree" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "college_name" TEXT NOT NULL,
     "degree_name" TEXT NOT NULL,
     "specialisation" TEXT,
@@ -788,7 +789,7 @@ CREATE TABLE "public"."ExternalDegree" (
 
 -- CreateTable
 CREATE TABLE "public"."Job" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "title" TEXT NOT NULL,
     "location" TEXT NOT NULL,
     "jd_link" TEXT,
@@ -807,7 +808,7 @@ CREATE TABLE "public"."Job" (
 
 -- CreateTable
 CREATE TABLE "public"."Placement" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "job_type" "public"."JobType" NOT NULL,
     "work_mode" "public"."WorkMode" NOT NULL,
@@ -824,7 +825,7 @@ CREATE TABLE "public"."Placement" (
 
 -- CreateTable
 CREATE TABLE "public"."Post" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "content" TEXT NOT NULL,
     "author_id" TEXT NOT NULL,
     "author_type" "public"."AuthorRole" NOT NULL,
@@ -837,7 +838,7 @@ CREATE TABLE "public"."Post" (
 
 -- CreateTable
 CREATE TABLE "public"."Flag" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "post_id" TEXT NOT NULL,
     "content" TEXT NOT NULL,
     "flagged_by" TEXT NOT NULL,
@@ -851,7 +852,7 @@ CREATE TABLE "public"."Flag" (
 
 -- CreateTable
 CREATE TABLE "public"."Comment" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "post_id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
     "user_role" TEXT NOT NULL,
@@ -864,7 +865,7 @@ CREATE TABLE "public"."Comment" (
 
 -- CreateTable
 CREATE TABLE "public"."PostMedia" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "type" TEXT NOT NULL,
     "mime_type" TEXT NOT NULL,
     "storage_url" TEXT NOT NULL,
@@ -879,7 +880,7 @@ CREATE TABLE "public"."PostMedia" (
 
 -- CreateTable
 CREATE TABLE "public"."ClubCoreTeam" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "student_id" TEXT NOT NULL,
     "club_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -890,7 +891,7 @@ CREATE TABLE "public"."ClubCoreTeam" (
 
 -- CreateTable
 CREATE TABLE "public"."ChangeLog" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "entity_name" TEXT NOT NULL,
     "entity_id" TEXT NOT NULL,
     "action" TEXT NOT NULL,
