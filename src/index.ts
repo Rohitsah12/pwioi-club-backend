@@ -13,6 +13,11 @@ import commentRoutes from "./routes/comments.routes.js";
 import likesRouter from "./routes/like.routes.js";
 import flagRoutes from "./routes/flag.routes.js";
 import schoolRoutes from "./routes/school.routes.js";
+import batchRoutes from "./routes/batch.routes.js";
+import divisionRoutes from "./routes/division.routes.js";
+import semesterRoutes from "./routes/semester.routes.js";
+import studentRoutes from "./routes/student.routes.js";
+import teacherRoutes from "./routes/teacher.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -35,6 +40,11 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/likes', likesRouter);
 app.use('/api/flags', flagRoutes);
 app.use('/api/schools',schoolRoutes);
+app.use('/api/batches',batchRoutes);
+app.use('/api/division',divisionRoutes);
+app.use('/api/semester',semesterRoutes)
+app.use('/api/students',studentRoutes)
+app.use('/api/teachers',teacherRoutes)
 
 
 

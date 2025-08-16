@@ -427,13 +427,14 @@ model Student {
   phone              String             @unique
   address            String?
   is_active          Boolean            @default(true)
+  deactivatedAt      DateTime? 
   firstLoggedIn      Boolean            @default(false)
   enrollment_id      String             @unique
   device_id          String?            @unique
   center_id          String
   school_id          String
   batch_id           String
-  semester_id        String?
+  semester_id        String
   division_id        String
   cohort_id          String?
   degree_id          String?
@@ -462,7 +463,7 @@ model Student {
   degree             ExternalDegree?    @relation(fields: [degree_id], references: [id], onDelete: Cascade)
   division           Division           @relation(fields: [division_id], references: [id], onDelete: Cascade)
   school             School             @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  semester           Semester?          @relation(fields: [semester_id], references: [id], onDelete: Cascade)
+  semester           Semester         @relation(fields: [semester_id], references: [id], onDelete: Cascade)
   examMarks          StudentExamMarks[]
   studentLogs        StudentLog[]
   submissions        Submission[]
@@ -610,14 +611,20 @@ model Division {
   center_id        String
   school_id        String
   batch_id         String
-  current_semester String?
+  current_semester String? @unique
+
+  start_date       DateTime
+  end_date         DateTime?
 
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @default(now()) @map("updated_at")
 
   classes          Class[]
+
   batch            Batch     @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+
   semester         Semester? @relation(fields: [current_semester], references: [id], onDelete: Cascade)
+
   students         Student[]
 
   center           Center    @relation(fields: [center_id], references: [id], onDelete: Cascade)
@@ -628,7 +635,6 @@ model Division {
   @@index([center_id], map: "division_center_id_idx")
   @@index([school_id], map: "division_school_id_idx")
 }
-
 
 model PersonalDetail {
   id                     String   @id @default(uuid())
@@ -648,43 +654,40 @@ model PersonalDetail {
 }
 
 model Batch {
-  id               String         @id @default(uuid())
-  name             String         @unique
-  center_id        String
-  school_id        String
-  current_semester String
-  start_date       DateTime
-  end_date         DateTime?
-  createdAt        DateTime       @default(now()) @map("created_at")
-  updatedAt        DateTime       @default(now()) @map("updated_at")
-  center           Center         @relation(fields: [center_id], references: [id], onDelete: Cascade)
-  semester         Semester       @relation("CurrentSemester", fields: [current_semester], references: [id], onDelete: Cascade)
-  school           School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  contests         BatchContest[]
-  divisions        Division[]
-  semesters        Semester[]     @relation("BatchSemesters")
-  students         Student[]
+  id          String    @id @default(uuid())
+  name        String    @unique
+  center_id   String
+  school_id   String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @map("updated_at")
+
+  center      Center    @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  school      School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
+
+  contests    BatchContest[]
+  divisions   Division[]
+  students    Student[]
 
   @@index([center_id], map: "batch_center_id_idx")
   @@index([school_id], map: "batch_school_id_idx")
-  @@index([current_semester], map: "batch_semester_id_idx")
 }
 
 model Semester {
-  id              String     @id @default(uuid())
-  number          Int
-  batch_id        String
-  start_date      DateTime
-  end_date        DateTime?
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @default(now()) @map("updated_at")
-  currentForBatch Batch[]    @relation("CurrentSemester")
-  divisions       Division[]
-  batch           Batch      @relation("BatchSemesters", fields: [batch_id], references: [id], onDelete: Cascade)
-  students        Student[]
-  subjects        Subject[]
+  id          String     @id @default(uuid())
+  number      Int
+  division    Division?  @relation 
+  division_id String   
 
-  @@index([batch_id], map: "semester_batch_id_idx")
+  start_date  DateTime
+  end_date    DateTime?
+
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @default(now()) @map("updated_at")
+
+  students    Student[]
+  subjects    Subject[]
+
+  @@index([division_id], map: "semester_division_id_idx")
 }
 
 model Mentor {
