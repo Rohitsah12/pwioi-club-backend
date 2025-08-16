@@ -380,13 +380,14 @@ CREATE TABLE "public"."Student" (
     "phone" TEXT NOT NULL,
     "address" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "deactivatedAt" TIMESTAMP(3),
     "firstLoggedIn" BOOLEAN NOT NULL DEFAULT false,
     "enrollment_id" TEXT NOT NULL,
     "device_id" TEXT,
     "center_id" TEXT NOT NULL,
     "school_id" TEXT NOT NULL,
     "batch_id" TEXT NOT NULL,
-    "semester_id" TEXT,
+    "semester_id" TEXT NOT NULL,
     "division_id" TEXT NOT NULL,
     "cohort_id" TEXT,
     "degree_id" TEXT,
@@ -535,6 +536,8 @@ CREATE TABLE "public"."Division" (
     "school_id" TEXT NOT NULL,
     "batch_id" TEXT NOT NULL,
     "current_semester" TEXT,
+    "start_date" TIMESTAMP(3) NOT NULL,
+    "end_date" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -564,9 +567,6 @@ CREATE TABLE "public"."Batch" (
     "name" TEXT NOT NULL,
     "center_id" TEXT NOT NULL,
     "school_id" TEXT NOT NULL,
-    "current_semester" TEXT NOT NULL,
-    "start_date" TIMESTAMP(3) NOT NULL,
-    "end_date" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -577,7 +577,7 @@ CREATE TABLE "public"."Batch" (
 CREATE TABLE "public"."Semester" (
     "id" TEXT NOT NULL,
     "number" INTEGER NOT NULL,
-    "batch_id" TEXT NOT NULL,
+    "division_id" TEXT NOT NULL,
     "start_date" TIMESTAMP(3) NOT NULL,
     "end_date" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1114,6 +1114,9 @@ CREATE INDEX "cohort_center_id_idx" ON "public"."Cohort"("center_id");
 CREATE UNIQUE INDEX "Division_code_key" ON "public"."Division"("code");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Division_current_semester_key" ON "public"."Division"("current_semester");
+
+-- CreateIndex
 CREATE INDEX "division_batch_id_idx" ON "public"."Division"("batch_id");
 
 -- CreateIndex
@@ -1144,10 +1147,7 @@ CREATE INDEX "batch_center_id_idx" ON "public"."Batch"("center_id");
 CREATE INDEX "batch_school_id_idx" ON "public"."Batch"("school_id");
 
 -- CreateIndex
-CREATE INDEX "batch_semester_id_idx" ON "public"."Batch"("current_semester");
-
--- CreateIndex
-CREATE INDEX "semester_batch_id_idx" ON "public"."Semester"("batch_id");
+CREATE INDEX "semester_division_id_idx" ON "public"."Semester"("division_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Mentor_email_key" ON "public"."Mentor"("email");
@@ -1450,13 +1450,7 @@ ALTER TABLE "public"."PersonalDetail" ADD CONSTRAINT "PersonalDetail_student_id_
 ALTER TABLE "public"."Batch" ADD CONSTRAINT "Batch_center_id_fkey" FOREIGN KEY ("center_id") REFERENCES "public"."Center"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Batch" ADD CONSTRAINT "Batch_current_semester_fkey" FOREIGN KEY ("current_semester") REFERENCES "public"."Semester"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."Batch" ADD CONSTRAINT "Batch_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."School"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Semester" ADD CONSTRAINT "Semester_batch_id_fkey" FOREIGN KEY ("batch_id") REFERENCES "public"."Batch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Subject" ADD CONSTRAINT "Subject_semester_id_fkey" FOREIGN KEY ("semester_id") REFERENCES "public"."Semester"("id") ON DELETE CASCADE ON UPDATE CASCADE;
