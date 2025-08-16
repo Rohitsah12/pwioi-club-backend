@@ -22,6 +22,7 @@ model Beacon {
 
 model Class {
   id          String       @id @default(uuid())
+  lecture_number String
   subject_id  String
   division_id String
   teacher_id  String
