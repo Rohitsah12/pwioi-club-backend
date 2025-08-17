@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js";
-import { createDivision, deleteDivision, getDivisionBatch, getDivisionByCenter, getDivisionBySchool, getDivisionDetails, updateDivision } from "../controllers/division.controllers.js";
+import { createDivision, deleteDivision, getDivisionBatch, getDivisionByCenter, getDivisionBySchool, getDivisionDetails, updateDivision } from "../controllers/division.controller.js";
 
 const divisionRoutes=Router();
 

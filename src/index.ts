@@ -20,6 +20,7 @@ import studentRoutes from "./routes/student.routes.js";
 import teacherRoutes from "./routes/teacher.routes.js";
 import studentProfileRoutes from "./routes/studentprofile.routes.js";
 import studentAttendanceRoutes from "./routes/studentattendance.routes.js";
+import studentAcademicsRoutes from "./routes/studentAcademics.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -49,6 +50,7 @@ app.use('/api/students',studentRoutes)
 app.use('/api/teachers',teacherRoutes)
 app.use('/api/students-profile',studentProfileRoutes)
 app.use("/api/student-attendance",studentAttendanceRoutes)
+app.use("/api/student-academics",studentAcademicsRoutes)
 
 
 
