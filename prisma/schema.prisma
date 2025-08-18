@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Beacon {
-  id        String   @id @default(uuid())
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
   major     Int
   minor     Int
   room_id   String
@@ -21,7 +21,8 @@ model Beacon {
 }
 
 model Class {
-  id          String       @id @default(uuid())
+  id          String       @id @default(dbgenerated("gen_random_uuid()"))
+  lecture_number String
   subject_id  String
   division_id String
   teacher_id  String
@@ -45,7 +46,7 @@ model Class {
 }
 
 model Scan {
-  id                 String              @id @default(uuid())
+  id                 String              @id @default(dbgenerated("gen_random_uuid()"))
   student_id         String
   class_id           String
   detected_beacon_id String
@@ -66,7 +67,7 @@ model Scan {
 }
 
 model ScanWindow {
-  id             String              @id @default(uuid())
+  id             String              @id @default(dbgenerated("gen_random_uuid()"))
   student_id     String
   class_id       String
   is_processed   Boolean
@@ -82,7 +83,7 @@ model ScanWindow {
 }
 
 model Attendance {
-  id                    String             @id @default(uuid())
+  id                    String             @id @default(dbgenerated("gen_random_uuid()"))
   student_id            String
   class_id              String
   status                AttendanceStatus
@@ -99,7 +100,7 @@ model Attendance {
 }
 
 model WindowScanMapping {
-  id             String     @id @default(uuid())
+  id             String     @id @default(dbgenerated("gen_random_uuid()"))
   scan_window_id String
   scan_id        String
   createdAt      DateTime   @default(now()) @map("created_at")
@@ -113,7 +114,7 @@ model WindowScanMapping {
 }
 
 model Room {
-  id        String   @id @default(uuid())
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
   name      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")
@@ -122,7 +123,7 @@ model Room {
 }
 
 model Problem {
-  id                String             @id @default(uuid())
+  id                String             @id @default(dbgenerated("gen_random_uuid()"))
   title             String             @db.VarChar(200)
   problem_statement String
   constraints       String?            @db.VarChar(200)
@@ -143,7 +144,7 @@ model Problem {
 }
 
 model ProblemTag {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
   problem_id String
   tag_id     String
   createdAt  DateTime @default(now()) @map("created_at")
@@ -154,7 +155,7 @@ model ProblemTag {
 }
 
 model Tag {
-  id          String       @id @default(uuid())
+  id          String       @id @default(dbgenerated("gen_random_uuid()"))
   name        String       @unique @db.VarChar(50)
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @default(now()) @map("updated_at")
@@ -162,7 +163,7 @@ model Tag {
 }
 
 model TestCase {
-  id                String             @id @default(uuid())
+  id                String             @id @default(dbgenerated("gen_random_uuid()"))
   problem_id        String
   input             String             @db.VarChar(200)
   expected_output   String             @db.VarChar(200)
@@ -178,7 +179,7 @@ model TestCase {
 }
 
 model ProblemModerator {
-  id           String   @id @default(uuid())
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
   problem_id   String
   moderator_id String
   createdAt    DateTime @default(now()) @map("created_at")
@@ -191,7 +192,7 @@ model ProblemModerator {
 }
 
 model Contest {
-  id               String             @id @default(uuid())
+  id               String             @id @default(dbgenerated("gen_random_uuid()"))
   title            String             @db.VarChar(200)
   description      String?
   start_time       DateTime
@@ -211,7 +212,7 @@ model Contest {
 }
 
 model BatchContest {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
   batch_id   String
   contest_id String
   createdAt  DateTime @default(now()) @map("created_at")
@@ -224,7 +225,7 @@ model BatchContest {
 }
 
 model ProgrammingLanguage {
-  id               String            @id @default(uuid())
+  id               String            @id @default(dbgenerated("gen_random_uuid()"))
   name             String            @db.VarChar(200)
   judge0_code      Int
   createdAt        DateTime          @default(now()) @map("created_at")
@@ -234,7 +235,7 @@ model ProgrammingLanguage {
 }
 
 model AllowedLanguage {
-  id          String              @id @default(uuid())
+  id          String              @id @default(dbgenerated("gen_random_uuid()"))
   language_id String
   contest_id  String
   createdAt   DateTime            @default(now()) @map("created_at")
@@ -247,7 +248,7 @@ model AllowedLanguage {
 }
 
 model ContestModerator {
-  id           String   @id @default(uuid())
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
   contest_id   String
   moderator_id String
   createdAt    DateTime @default(now()) @map("created_at")
@@ -260,7 +261,7 @@ model ContestModerator {
 }
 
 model ContestProblem {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
   contest_id String
   problem_id String
   points     Int      @default(100)
@@ -275,7 +276,7 @@ model ContestProblem {
 }
 
 model Submission {
-  id             String              @id @default(uuid())
+  id             String              @id @default(dbgenerated("gen_random_uuid()"))
   user_id        String
   problem_id     String
   contest_id     String?
@@ -300,14 +301,14 @@ model Submission {
 }
 
 model SubmissionStatus {
-  id                String             @id @default(uuid())
+  id                String             @id @default(dbgenerated("gen_random_uuid()"))
   name              String             @db.VarChar(200)
   submissions       Submission[]
   submissionResults SubmissionResult[]
 }
 
 model SubmissionResult {
-  id             String           @id @default(uuid())
+  id             String           @id @default(dbgenerated("gen_random_uuid()"))
   submission_id  String
   test_case_id   String
   status_id      String
@@ -323,7 +324,7 @@ model SubmissionResult {
 }
 
 model Center {
-  id            String     @id @default(uuid())
+  id            String     @id @default(dbgenerated("gen_random_uuid()"))
   name          String
   location      String
   code          Int        @unique
@@ -346,7 +347,7 @@ model Center {
 }
 
 model RoleAdmin {
-  id        String   @id @default(uuid())
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
   role      RoleType @unique
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")
@@ -354,7 +355,7 @@ model RoleAdmin {
 }
 
 model Admin {
-  id                  String         @id @default(uuid())
+  id                  String         @id @default(dbgenerated("gen_random_uuid()"))
   name                String
   email               String         @unique
   phone               String         @unique
@@ -376,7 +377,7 @@ model Admin {
 }
 
 model School {
-  id             String          @id @default(uuid())
+  id             String          @id @default(dbgenerated("gen_random_uuid()"))
   name           SchoolName
   center_id      String
   createdAt      DateTime        @default(now()) @map("created_at")
@@ -392,7 +393,7 @@ model School {
 }
 
 model TeacherCohort {
-  id             String   @id @default(uuid())
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
   teacher_id     String
   cohort_id      String
   specialisation String
@@ -406,7 +407,7 @@ model TeacherCohort {
 }
 
 model TeacherSchool {
-  id             String   @id @default(uuid())
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
   teacher_id     String
   school_id      String
   specialisation String
@@ -420,7 +421,7 @@ model TeacherSchool {
 }
 
 model Student {
-  id                 String             @id @default(uuid())
+  id                 String             @id @default(dbgenerated("gen_random_uuid()"))
   name               String
   email              String             @unique
   googleId           String?
@@ -471,7 +472,7 @@ model Student {
 }
 
 model Behaviour {
-  id          String   @id @default(uuid())
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
   admin_id    String
   action      String
   student_id  String
@@ -486,7 +487,7 @@ model Behaviour {
 }
 
 model SocialLink {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
   student_id String
   platform   String
   link       String
@@ -498,7 +499,7 @@ model SocialLink {
 }
 
 model StudentLog {
-  id              String   @id @default(uuid())
+  id              String   @id @default(dbgenerated("gen_random_uuid()"))
   student_id      String
   action          String
   old_data        Json?
@@ -513,7 +514,7 @@ model StudentLog {
 }
 
 model Project {
-  id           String    @id @default(uuid())
+  id           String    @id @default(dbgenerated("gen_random_uuid()"))
   student_id   String
   name         String
   description  String?
@@ -530,7 +531,7 @@ model Project {
 }
 
 model Certification {
-  id           String    @id @default(uuid())
+  id           String    @id @default(dbgenerated("gen_random_uuid()"))
   student_id   String
   name         String
   organisation String
@@ -545,7 +546,7 @@ model Certification {
 }
 
 model Education {
-  id                  String            @id @default(uuid())
+  id                  String            @id @default(dbgenerated("gen_random_uuid()"))
   institution         String
   degree              String
   field_of_study      String
@@ -560,7 +561,7 @@ model Education {
 }
 
 model AcademicHistory {
-  id            String     @id @default(uuid())
+  id            String     @id @default(dbgenerated("gen_random_uuid()"))
   student_id    String     @unique
   x_education   String?
   xii_education String?
@@ -578,7 +579,7 @@ model AcademicHistory {
 }
 
 model Achievement {
-  id           String   @id @default(uuid())
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
   student_id   String
   title        String
   description  String?
@@ -592,7 +593,7 @@ model Achievement {
 }
 
 model Cohort {
-  id             String          @id @default(uuid())
+  id             String          @id @default(dbgenerated("gen_random_uuid()"))
   name           String
   center_id      String
   start_date     DateTime
@@ -607,7 +608,7 @@ model Cohort {
 }
 
 model Division {
-  id               String  @id @default(uuid())
+  id               String  @id @default(dbgenerated("gen_random_uuid()"))
   code             String  @unique
   center_id        String
   school_id        String
@@ -635,7 +636,7 @@ model Division {
 }
 
 model PersonalDetail {
-  id                     String   @id @default(uuid())
+  id                     String   @id @default(dbgenerated("gen_random_uuid()"))
   student_id             String   @unique
   personal_email         String   @unique
   fathers_name           String?
@@ -652,7 +653,7 @@ model PersonalDetail {
 }
 
 model Batch {
-  id        String   @id @default(uuid())
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
   name      String   @unique
   center_id String
   school_id String
@@ -671,7 +672,7 @@ model Batch {
 }
 
 model Semester {
-  id          String    @id @default(uuid())
+  id          String    @id @default(dbgenerated("gen_random_uuid()"))
   number      Int
   division    Division? @relation
   division_id String
@@ -689,7 +690,7 @@ model Semester {
 }
 
 model Mentor {
-  id          String   @id @default(uuid())
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
   name        String
   email       String   @unique
   phone       String   @unique
@@ -701,7 +702,7 @@ model Mentor {
 }
 
 model Subject {
-  id          String             @id @default(uuid())
+  id          String             @id @default(dbgenerated("gen_random_uuid()"))
   name        String
   semester_id String
   credits     Int
@@ -720,7 +721,7 @@ model Subject {
 }
 
 model Exam {
-  id            String             @id @default(uuid())
+  id            String             @id @default(dbgenerated("gen_random_uuid()"))
   name          String
   weightage     Float
   full_marks    Float
@@ -737,7 +738,7 @@ model Exam {
 }
 
 model StudentExamMarks {
-  id             String   @id @default(uuid())
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
   student_id     String
   subject_id     String
   exam_id        String
@@ -761,7 +762,7 @@ model StudentExamMarks {
 }
 
 model TeacherExperience {
-  id           String    @id @default(uuid())
+  id           String    @id @default(dbgenerated("gen_random_uuid()"))
   title        String
   company_name String
   location     String?
@@ -778,7 +779,7 @@ model TeacherExperience {
 }
 
 model Teacher {
-  id                 String                 @id @default(uuid())
+  id                 String                 @id @default(dbgenerated("gen_random_uuid()"))
   name               String
   email              String                 @unique
   phone              String                 @unique
@@ -814,7 +815,7 @@ model Teacher {
 }
 
 model TeacherResearchPaper {
-  id                String        @id @default(uuid())
+  id                String        @id @default(dbgenerated("gen_random_uuid()"))
   teacher_id        String
   research_paper_id String
   createdAt         DateTime      @default(now()) @map("created_at")
@@ -827,7 +828,7 @@ model TeacherResearchPaper {
 }
 
 model ResearchPaper {
-  id                    String                 @id @default(uuid())
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()"))
   title                 String                 @db.VarChar(500)
   abstract              String?
   publication_date      DateTime?
@@ -840,7 +841,7 @@ model ResearchPaper {
 }
 
 model Club {
-  id            String         @id @default(uuid())
+  id            String         @id @default(dbgenerated("gen_random_uuid()"))
   category      String
   name          String
   description   String?
@@ -856,7 +857,7 @@ model Club {
 }
 
 model ClubOfficial {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
   club_id    String
   teacher_id String?
   admin_id   String?
@@ -870,7 +871,7 @@ model ClubOfficial {
 }
 
 model Event {
-  id          String    @id @default(uuid())
+  id          String    @id @default(dbgenerated("gen_random_uuid()"))
   name        String
   organiser   String
   venue       String
@@ -885,7 +886,7 @@ model Event {
 }
 
 model Policy {
-  id             String   @id @default(uuid())
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
   name           String
   pdf_url        String
   effective_date DateTime
@@ -900,7 +901,7 @@ model Policy {
 }
 
 model ExternalDegree {
-  id             String    @id @default(uuid())
+  id             String    @id @default(dbgenerated("gen_random_uuid()"))
   college_name   String
   degree_name    String
   specialisation String?
@@ -912,7 +913,7 @@ model ExternalDegree {
 }
 
 model Job {
-  id           String    @id @default(uuid())
+  id           String    @id @default(dbgenerated("gen_random_uuid()"))
   title        String
   location     String
   jd_link      String?
@@ -928,7 +929,7 @@ model Job {
 }
 
 model Placement {
-  id           String    @id @default(uuid())
+  id           String    @id @default(dbgenerated("gen_random_uuid()"))
   student_id   String
   job_type     JobType
   work_mode    WorkMode
@@ -955,7 +956,7 @@ enum AuthorRole {
 }
 
 model Post {
-  id          String      @id @default(uuid())
+  id          String      @id @default(dbgenerated("gen_random_uuid()"))
   content     String
   author_id   String
   author_type AuthorRole
@@ -968,7 +969,7 @@ model Post {
 }
 
 model Flag {
-  id          String   @id @default(uuid())
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
   post_id     String
   content     String
   flagged_by  String
@@ -982,7 +983,7 @@ model Flag {
 }
 
 model Comment {
-  id        String   @id @default(uuid())
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
   post_id   String
   user_id   String
   user_role String
@@ -995,7 +996,7 @@ model Comment {
 }
 
 model PostMedia {
-  id            String   @id @default(uuid())
+  id            String   @id @default(dbgenerated("gen_random_uuid()"))
   type          String
   mime_type     String
   storage_url   String
@@ -1010,7 +1011,7 @@ model PostMedia {
 }
 
 model ClubCoreTeam {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
   student_id String
   club_id    String
   createdAt  DateTime @default(now()) @map("created_at")
@@ -1023,7 +1024,7 @@ model ClubCoreTeam {
 }
 
 model ChangeLog {
-  id              String   @id @default(uuid())
+  id              String   @id @default(dbgenerated("gen_random_uuid()"))
   entity_name     String
   entity_id       String
   action          String
