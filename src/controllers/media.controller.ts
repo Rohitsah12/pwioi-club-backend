@@ -8,7 +8,7 @@ export const generateSignedUrl = catchAsync(async (req, res) => {
   if (!fileName || !fileType) throw new AppError("Missing fileName or fileType", 400);
 
   const ext = fileName.split(".").pop();
-  const key = `posts/${uuid()}.${ext}`;
+  const key = `media/${uuid()}.${ext}`;
 
   const uploadUrl = await getUploadUrl(key, fileType);
   const publicUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_S3_REGION}.amazonaws.com/${key}`;

@@ -5,196 +5,123 @@ import { catchAsync } from "../utils/catchAsync.js";
 import { AuthorRole } from "../types/postApi.js";
 
 interface CreateBatchRequest {
-    schoolId: string;
-    name: string;
+  schoolId: string;
+  name: string;
 }
 
 export const createBatch = catchAsync(async (
-    req: Request<{}, {}, CreateBatchRequest>,
-    res: Response
+  req: Request<{}, {}, CreateBatchRequest>,
+  res: Response
 ) => {
-    let { schoolId, name } = req.body;
-    const { role, sub } = req.user!;
+  let { schoolId, name } = req.body;
+  const { role } = req.user!;
 
-    if (!schoolId || !name) {
-        throw new AppError("schoolId and batch name are required", 400);
+  if (!schoolId || !name) {
+    throw new AppError("schoolId and batch name are required", 400);
+  }
+
+  name = name.trim().toUpperCase();
+
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { center_id: true }
+  });
+  if (!school) {
+    throw new AppError("School not found", 404);
+  }
+  const centerId = school.center_id;
+
+  const existingBatch = await prisma.batch.findFirst({
+    where: {
+      name: { equals: name, mode: 'insensitive' },
+      center_id: centerId,
+      school_id: schoolId
+    },
+  });
+  if (existingBatch) {
+    throw new AppError("Batch name already exists for this school in the center", 400);
+  }
+
+  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
+    throw new AppError("Role not permitted to create batch", 403);
+  }
+
+  const batch = await prisma.batch.create({
+    data: {
+      name,
+      center_id: centerId,
+      school_id: schoolId,
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
+  });
 
-    name = name.trim().toUpperCase();
-
-    // Find school to get centerId
-    const school = await prisma.school.findUnique({
-        where: { id: schoolId },
-        select: { center_id: true }
-    });
-    if (!school) {
-        throw new AppError("School not found", 404);
-    }
-    const centerId = school.center_id;
-
-    // Check duplicate batch name scoped to centerId and schoolId
-    const existingBatch = await prisma.batch.findFirst({
-        where: {
-            name: {
-                equals: name,
-                mode: 'insensitive'
-            },
-            center_id: centerId,
-            school_id: schoolId
-        }
-    });
-    if (existingBatch) {
-        throw new AppError("Batch name already exists for this school in the center", 400);
-    }
-
-    // Find center for authorization
-    const center = await prisma.center.findUnique({
-        where: { id: centerId },
-        select: { business_head: true, academic_head: true }
-    });
-    if (!center) {
-        throw new AppError("Center not found", 404);
-    }
-
-    // Role based permission check
-    if (role === AuthorRole.ADMIN) {
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to create batch in this center", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("Role not permitted to create batch", 403);
-    }
-
-    // Create batch
-    const batch = await prisma.batch.create({
-        data: {
-            name,
-            center_id: centerId,
-            school_id: schoolId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        }
-    });
-
-    res.status(201).json({
-        success: true,
-        message: "Batch created successfully",
-        data: batch
-    });
+  res.status(201).json({
+    success: true,
+    message: "Batch created successfully",
+    data: batch
+  });
 });
+
+
 export const getAllBatchesSchoolwise = catchAsync(async (
-    req: Request,
-    res: Response
+  req: Request,
+  res: Response
 ) => {
-    const { schoolId } = req.params;
-    if (!schoolId) {
-        throw new AppError("schoolId Required", 400)
-    }
-    const { role, sub } = req.user!;
+  const { schoolId } = req.params;
+  if (!schoolId) {
+    throw new AppError("schoolId Required", 400);
+  }
+  const { role } = req.user!;
 
-    const school = await prisma.school.findUnique({
-        where: { id: schoolId },
-        select: { center_id: true }
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { center_id: true }
+  });
+  if (!school) throw new AppError("School not found", 404);
+
+  if (role === AuthorRole.ADMIN || role === AuthorRole.SUPER_ADMIN) {
+    const batches = await prisma.batch.findMany({
+      where: { school_id: schoolId },
+      orderBy: { createdAt: "desc" }
     });
-    if (!school) throw new AppError("School not found", 404);
+    return res.status(200).json({ success: true, count: batches.length, data: batches });
+  }
 
-    const centerId = school.center_id;
-
-    if (role === AuthorRole.SUPER_ADMIN) {
-        const batches = await prisma.batch.findMany({
-            where: { school_id: schoolId },
-            orderBy: { createdAt: "desc" }
-        });
-        return res.status(200).json({ success: true, count: batches.length, data: batches });
-    }
-
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: centerId },
-            select: { academic_head: true, business_head: true }
-        });
-        if (!center) throw new AppError("Center not found", 404);
-
-        if (center.academic_head !== sub && center.business_head !== sub) {
-            throw new AppError("Not authorized to access batches for this school", 403);
-        }
-
-        const batches = await prisma.batch.findMany({
-            where: { school_id: schoolId },
-            orderBy: { createdAt: "desc" }
-        });
-        return res.status(200).json({ success: true, count: batches.length, data: batches });
-    }
-
-    if (role === AuthorRole.TEACHER) {
-        const teacher = await prisma.teacher.findUnique({
-            where: { id: sub },
-            select: { center_id: true }
-        });
-        if (!teacher) throw new AppError("Teacher not found", 404);
-
-        if (teacher.center_id !== centerId) {
-            throw new AppError("Not authorized to access batches for this school", 403);
-        }
-
-        const batches = await prisma.batch.findMany({
-            where: { school_id: schoolId },
-            orderBy: { createdAt: "desc" }
-        });
-        return res.status(200).json({ success: true, count: batches.length, data: batches });
-    }
-
-    throw new AppError("Role not permitted", 403);
+  throw new AppError("Role not permitted", 403);
 });
+
 
 export const deleteBatch = catchAsync(async (
-    req: Request,
-    res: Response
+  req: Request,
+  res: Response
 ) => {
-    const { batchId } = req.params;
-    if (!batchId) {
-        throw new AppError("BatchId required", 400)
-    }
-    const { role, sub } = req.user!;
+  const { batchId } = req.params;
+  if (!batchId) {
+    throw new AppError("BatchId required", 400);
+  }
+  const { role } = req.user!;
 
-    // Find batch with center info to check ownership
-    const batch = await prisma.batch.findUnique({
-        where: { id: batchId },
-        select: { id: true, center_id: true }
-    });
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    select: { id: true }
+  });
+  if (!batch) {
+    throw new AppError("Batch not found", 404);
+  }
 
-    if (!batch) {
-        throw new AppError("Batch not found", 404);
-    }
+  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
+    throw new AppError("Role not permitted to delete batch", 403);
+  }
 
-    if (role === AuthorRole.ADMIN) {
-        // Check if admin is head of the center this batch belongs to
-        const center = await prisma.center.findUnique({
-            where: { id: batch.center_id },
-            select: { business_head: true, academic_head: true }
-        });
+  await prisma.batch.delete({ where: { id: batchId } });
 
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to delete this batch", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("Role not permitted to delete batch", 403);
-    }
-
-    // Proceed to delete the batch
-    await prisma.batch.delete({
-        where: { id: batchId }
-    });
-
-    res.status(200).json({
-        success: true,
-        message: "Batch deleted successfully"
-    });
+  res.status(200).json({
+    success: true,
+    message: "Batch deleted successfully"
+  });
 });
+
 
 export const updateBatch = catchAsync(async (
   req: Request,
@@ -206,7 +133,7 @@ export const updateBatch = catchAsync(async (
   }
 
   let { name } = req.body;
-  const { role, sub } = req.user!;
+  const { role } = req.user!;
 
   if (name !== undefined) {
     if (typeof name !== "string" || name.trim() === "") {
@@ -229,25 +156,11 @@ export const updateBatch = catchAsync(async (
     throw new AppError("Batch not found", 404);
   }
 
-  if (role === AuthorRole.ADMIN) {
-    const center = await prisma.center.findUnique({
-      where: { id: batch.center_id },
-      select: { business_head: true, academic_head: true }
-    });
-
-    if (!center) {
-      throw new AppError("Center not found", 404);
-    }
-
-    if (center.business_head !== sub && center.academic_head !== sub) {
-      throw new AppError("Not authorized to update this batch", 403);
-    }
-  } else if (role !== AuthorRole.SUPER_ADMIN) {
+  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
     throw new AppError("Role not permitted to update batch", 403);
   }
 
   if (batch.name.toUpperCase() === name) {
-    // Name is unchanged; no need to update
     return res.status(200).json({
       success: true,
       message: "Batch name unchanged",
@@ -255,7 +168,6 @@ export const updateBatch = catchAsync(async (
     });
   }
 
-  // Check for duplicate name in the same center and school
   const existingBatch = await prisma.batch.findFirst({
     where: {
       name: { equals: name, mode: "insensitive" },
@@ -280,61 +192,57 @@ export const updateBatch = catchAsync(async (
     data: updatedBatch
   });
 });
+
+
 export const getBatchDetails = catchAsync(async (
-    req: Request,
-    res: Response
+  req: Request,
+  res: Response
 ) => {
-    const  {batchId}  = req.params;
-    if (!batchId) {
-        throw new AppError("BatchId requires", 400)
+  const { batchId } = req.params;
+  if (!batchId) {
+    throw new AppError("BatchId required", 400);
+  }
+  const { role } = req.user!;
+
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    select: {
+      id: true,
+      name: true,
+      center_id: true,
+      school_id: true,
+      createdAt: true,
+      updatedAt: true,
+      center: {
+        select: { id: true, name: true }
+      },
+      school: {
+        select: { id: true, name: true }
+      }
     }
+  });
 
-    const { role, sub } = req.user!;
+  if (!batch) {
+    throw new AppError("Batch not found", 404);
+  }
 
-    const batch = await prisma.batch.findUnique({
-        where: { id: batchId },
-        select: {
-            id: true,
-            name: true,
-            center_id: true,
-            school_id: true,
-            createdAt: true,
-            updatedAt: true,
-            center: {
-                select: { id: true, name: true, business_head: true, academic_head: true }
-            },
-            school: {
-                select: { id: true, name: true }
-            }
-        }
-    });
+  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
+    throw new AppError("Role not permitted to access batch details", 403);
+  }
 
-    if (!batch) {
-        throw new AppError("Batch not found", 404);
+  const [studentCount, divisionCount] = await Promise.all([
+    prisma.student.count({ where: { batch_id: batchId } }),
+    prisma.division.count({ where: { batch_id: batchId } }),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      batch,
+      stats: {
+        totalStudents: studentCount,
+        totalDivisions: divisionCount
+      }
     }
-
-    if (role === AuthorRole.ADMIN) {
-        const center = batch.center;
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to access this batch", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("Role not permitted to access batch details", 403);
-    }
-
-    const [studentCount, divisionCount] = await Promise.all([
-        prisma.student.count({ where: { batch_id: batchId } }),
-        prisma.division.count({ where: { batch_id: batchId } }),
-    ]);
-
-    res.status(200).json({
-        success: true,
-        data: {
-            batch,
-            stats: {
-                totalStudents: studentCount,
-                totalDivisions: divisionCount
-            }
-        }
-    });
+  });
 });

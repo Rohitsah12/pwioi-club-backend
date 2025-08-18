@@ -41,22 +41,8 @@ export const createDivision = catchAsync(async (
 
     const { center_id: centerId, school_id: schoolId } = batch;
 
-    if (role === AuthorRole.ADMIN) {
-
-
-        const center = await prisma.center.findUnique({
-            where: { id: centerId },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to create division for this center", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to create division", 403);
     }
 
@@ -110,20 +96,8 @@ export const updateDivision = catchAsync(async (
         throw new AppError("Division not found", 404);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: division.center_id },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to update this division", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to update division", 403);
     }
 
@@ -210,20 +184,8 @@ export const deleteDivision = catchAsync(async (req: Request, res: Response) => 
         throw new AppError("Division not found", 404);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: division.center_id },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to delete this division", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to delete division", 403);
     }
 
@@ -260,20 +222,8 @@ export const getDivisionBatch = catchAsync(async (
 
     const centerId = batch.center_id;
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: centerId },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to access divisions of this batch", 403);
-        }
-    } else if (role === AuthorRole.TEACHER) {
+    // Allow ADMIN and SUPER_ADMIN full access, keep TEACHER restriction
+    if (role === AuthorRole.TEACHER) {
         // Check if teacher belongs to the batch center
         const teacher = await prisma.teacher.findUnique({
             where: { id: sub },
@@ -287,7 +237,7 @@ export const getDivisionBatch = catchAsync(async (
         if (teacher.center_id !== centerId) {
             throw new AppError("Not authorized to access divisions of this batch", 403);
         }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    } else if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to access divisions", 403);
     }
 
@@ -301,7 +251,8 @@ export const getDivisionBatch = catchAsync(async (
         count: divisions.length,
         data: divisions
     });
-})
+});
+
 export const getDivisionBySchool = catchAsync(async (
     req: Request,
     res: Response
@@ -323,23 +274,8 @@ export const getDivisionBySchool = catchAsync(async (
         throw new AppError("School not found", 404);
     }
 
-    const centerId = school.center_id;
-
-    if (role === AuthorRole.ADMIN) {
-        // Check if admin heads the center
-        const center = await prisma.center.findUnique({
-            where: { id: centerId },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to access divisions of this school", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to access divisions", 403);
     }
 
@@ -366,20 +302,8 @@ export const getDivisionByCenter = catchAsync(async (
         throw new AppError("centerId is required", 400);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: centerId },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to access divisions of this center", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to access divisions", 403);
     }
 
@@ -394,6 +318,7 @@ export const getDivisionByCenter = catchAsync(async (
         data: divisions
     });
 });
+
 export const getDivisionDetails = catchAsync(async (
   req: Request,
   res: Response
@@ -415,21 +340,8 @@ export const getDivisionDetails = catchAsync(async (
     throw new AppError("Division not found", 404);
   }
 
-  // Role-based access control
-  if (role === AuthorRole.ADMIN) {
-    const center = await prisma.center.findUnique({
-      where: { id: divisionExists.center_id },
-      select: { business_head: true, academic_head: true }
-    });
-
-    if (!center) {
-      throw new AppError("Center not found", 404);
-    }
-
-    if (center.business_head !== sub && center.academic_head !== sub) {
-      throw new AppError("Not authorized to access this division", 403);
-    }
-  } else if (role !== AuthorRole.SUPER_ADMIN) {
+  // Allow both ADMIN and SUPER_ADMIN full access
+  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
     throw new AppError("Role not permitted to access division details", 403);
   }
 

@@ -14,6 +14,7 @@ interface AssignHeadsBody {
     businessHeadId?: string;
     academicHeadId?: string;
 }
+
 export const createCenter = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
         const { name, location, code } = req.body as CreateCenterBody;
@@ -30,7 +31,6 @@ export const createCenter = catchAsync(
         const center = await prisma.center.create({
             data: { name, location, code, business_head: null, academic_head: null },
         });
-
 
         res.status(201).json({
             success: true,
@@ -155,6 +155,7 @@ export const getAllCenters = catchAsync(
     });
   }
 );
+
 export const getAllCentersByAdmin = catchAsync(async (
   req: Request,
   res: Response
@@ -168,7 +169,8 @@ export const getAllCentersByAdmin = catchAsync(async (
 
   let centers, stats;
 
-  if (role === AuthorRole.SUPER_ADMIN) {
+  // Both SUPER_ADMIN and ADMIN now have full access to all centers
+  if (role === AuthorRole.SUPER_ADMIN || role === AuthorRole.ADMIN) {
     centers = await prisma.center.findMany({
       include: {
         businessHead: { select: { id: true, name: true, designation: true } },
@@ -177,9 +179,9 @@ export const getAllCentersByAdmin = catchAsync(async (
       orderBy: { createdAt: "desc" },
     });
 
-    // System-wide counts
+    // System-wide counts for all centers
     const [
-      schools, cohorts, teachers, students, batches, divisions
+      schools, cohorts, teachers, students, batches, divisions, policy
     ] = await Promise.all([
       prisma.school.count(),
       prisma.cohort.count(),
@@ -188,52 +190,6 @@ export const getAllCentersByAdmin = catchAsync(async (
       prisma.batch.count(),
       prisma.division.count(),
       prisma.policy.count()
-    ]);
-
-    stats = {
-      schools,
-      cohorts,
-      teachers,
-      students,
-      batches,
-      divisions
-    };
-
-  } else if (role === AuthorRole.ADMIN) {
-    if (adminId !== sub) {
-      throw new AppError("Admins can only access their own centers.", 403);
-    }
-    centers = await prisma.center.findMany({
-      where: {
-        OR: [
-          { business_head: adminId },
-          { academic_head: adminId },
-        ],
-      },
-      include: {
-        businessHead: { select: { id: true, name: true, designation: true } },
-        academicHead: { select: { id: true, name: true, designation: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // For these centers, get entity IDs
-    const centerIds = centers.map(c => c.id);
-
-    if(!centerIds){
-      throw new AppError("Admin is not associated with any centers",400)
-    }
-
-    const [
-      schools, cohorts, teachers, students, batches, divisions,policy
-    ] = await Promise.all([
-      prisma.school.count({ where: { center_id: { in: centerIds } } }),
-      prisma.cohort.count({ where: { center_id: { in: centerIds } } }),
-      prisma.teacher.count({ where: { center_id: { in: centerIds } } }),
-      prisma.student.count({ where: { center_id: { in: centerIds } } }),
-      prisma.batch.count({ where: { center_id: { in: centerIds } } }),
-      prisma.division.count({ where: { center_id: { in: centerIds } } }),
-      prisma.policy.count({where:{center_id:{in:centerIds}}})
     ]);
 
     stats = {
