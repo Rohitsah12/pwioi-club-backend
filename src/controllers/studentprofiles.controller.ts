@@ -398,26 +398,107 @@ export const createPersonalDetails = catchAsync(async (req: Request, res: Respon
     });
 });
 
-export const getPersonalDetails = catchAsync(async (req: Request, res: Response) => {
-    const { studentId } = req.params;
+export const getStudentContactInfo = catchAsync(async (req: Request, res: Response) => {
+  const { studentId } = req.params;
+  
+  if (!studentId) {
+    throw new AppError("Student ID is required", 400);
+  }
 
-    if (!studentId) {
-        throw new AppError("Student ID is required.", 400);
-    }
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      gender: true,
+      address: true,
+      name: true, 
+    },
+  });
 
-    const personalDetails = await prisma.personalDetail.findUnique({
-        where: { student_id: studentId }
-    });
+  if (!student) {
+    throw new AppError("Student not found", 404);
+  }
 
-    if (!personalDetails) {
-        throw new AppError("Personal details not found for this student.", 404);
-    }
-
-    res.status(200).json({
-        success: true,
-        data: personalDetails
-    });
+  res.status(200).json({
+    success: true,
+    data: {
+      id: student.id,
+      name: student.name,
+      email: student.email,
+      phone: student.phone,
+      gender: student.gender,
+      address: student.address,
+    },
+  });
 });
+const updateAddressSchema = z.object({
+  address: z.string().min(1, "Address is required").max(500, "Address cannot exceed 500 characters").trim(),
+});
+export const updateStudentAddress = catchAsync(async (req: Request, res: Response) => {
+  const { studentId } = req.params;
+  
+  if (!studentId) {
+    throw new AppError("Student ID is required", 400);
+  }
+
+  const validation = updateAddressSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({
+      success: false,
+      errors: validation.error.format(),
+    });
+  }
+
+  const { address } = validation.data;
+
+  // Check if student exists
+  const studentExists = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { id: true, name: true },
+  });
+
+  if (!studentExists) {
+    throw new AppError("Student not found", 404);
+  }
+
+  // Update student address
+  const updatedStudent = await prisma.student.update({
+    where: { id: studentId },
+    data: { 
+      address: address,
+      updatedAt: new Date(),
+    },
+    select: {
+      id: true,
+      name: true,
+      address: true,
+      updatedAt: true,
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Address updated successfully",
+    data: updatedStudent,
+  });
+});
+export const getPersonalDetails = catchAsync(async (req: Request, res: Response) => {
+  const { studentId } = req.params;
+  if (!studentId) throw new AppError("Student ID is required.", 400);
+
+  await checkStudentExists(studentId);
+  const personalDetails = await prisma.personalDetail.findUnique({
+    where: { student_id: studentId }
+  });
+
+  res.status(200).json({
+    success: true,
+    data: personalDetails || {}
+  });
+});
+
 
 export const updatePersonalDetails = catchAsync(async (req: Request, res: Response) => {
     const { studentId } = req.params;
@@ -616,11 +697,9 @@ export const createOrUpdateAcademicHistory = catchAsync(async (req: Request, res
 
 export const getAcademicHistory = catchAsync(async (req: Request, res: Response) => {
     const { studentId } = req.params;
-
-    if (!studentId) {
-        throw new AppError("Student ID is required.", 400);
-    }
-
+    if (!studentId) throw new AppError("Student ID is required.", 400);
+    
+    await checkStudentExists(studentId);
     const academicHistory = await prisma.academicHistory.findUnique({
         where: { student_id: studentId },
         include: {
@@ -630,13 +709,18 @@ export const getAcademicHistory = catchAsync(async (req: Request, res: Response)
         }
     });
 
-    if (!academicHistory) {
-        throw new AppError("Academic history not found for this student.", 404);
-    }
-
+    // Return empty structure if not found
     res.status(200).json({
         success: true,
-        data: academicHistory
+        data: academicHistory || {
+            student_id: studentId,
+            undergraduate: null,
+            x_education: null,
+            xii_education: null,
+            undergrad: null,
+            xEducation: null,
+            xiiEducation: null
+        }
     });
 });
 
@@ -684,14 +768,9 @@ export const deleteAcademicHistory = catchAsync(async (req: Request, res: Respon
 
 export const getAllProjects = catchAsync(async (req: Request, res: Response) => {
     const { studentId } = req.params;
-
-    if (!studentId) {
-        throw new AppError("Student ID is required.", 400);
-    }
-
-    // Check if student exists
+    if (!studentId) throw new AppError("Student ID is required.", 400);
+    
     await checkStudentExists(studentId);
-
     const projects = await prisma.project.findMany({
         where: { student_id: studentId },
         orderBy: { start_date: 'desc' }
@@ -924,9 +1003,8 @@ export const deleteProject = catchAsync(async (req: Request, res: Response) => {
 export const getAllCertifications = catchAsync(async (req: Request, res: Response) => {
     const { studentId } = req.params;
     if (!studentId) throw new AppError("Student ID is required", 400);
-
+    
     await checkStudentExists(studentId);
-
     const certifications = await prisma.certification.findMany({
         where: { student_id: studentId },
         orderBy: { start_date: "desc" }
@@ -1085,8 +1163,8 @@ export const deleteCertification = catchAsync(async (req: Request, res: Response
 export const getAllPlacements = catchAsync(async (req: Request, res: Response) => {
     const { studentId } = req.params;
     if (!studentId) throw new AppError("Student ID is required.", 400);
+    
     await checkStudentExists(studentId);
-
     const placements = await prisma.placement.findMany({
         where: { student_id: studentId },
         orderBy: { start_date: "desc" }
@@ -1228,8 +1306,8 @@ export const deletePlacements = catchAsync(async (req: Request, res: Response) =
 export const getAllAchievements = catchAsync(async (req: Request, res: Response) => {
     const { studentId } = req.params;
     if (!studentId) throw new AppError("Student ID is required.", 400);
+    
     await checkStudentExists(studentId);
-
     const achievements = await prisma.achievement.findMany({
         where: { student_id: studentId },
         orderBy: { start_date: "desc" },
@@ -1367,8 +1445,8 @@ export const deleteAchievements = catchAsync(async (req: Request, res: Response)
 export const getAllSocialLinks = catchAsync(async (req: Request, res: Response) => {
     const { studentId } = req.params;
     if (!studentId) throw new AppError("Student ID is required.", 400);
+    
     await checkStudentExists(studentId);
-
     const links = await prisma.socialLink.findMany({
         where: { student_id: studentId },
         orderBy: { createdAt: "desc" }
@@ -1380,7 +1458,6 @@ export const getAllSocialLinks = catchAsync(async (req: Request, res: Response) 
         data: links,
     });
 });
-
 export const getSocialLinksById = catchAsync(async (req: Request, res: Response) => {
     const { studentId, socialLinkId } = req.params;
     if (!studentId) throw new AppError("Student ID is required.", 400);

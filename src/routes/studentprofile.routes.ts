@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js";
-import { createAchievement, createCertification, createOrUpdateAcademicHistory, createPersonalDetails, createPlacements, createProject, createSocialLinks, createStudentDegreePartner, deleteAcademicHistory, deleteAchievements, deleteCertification, deletePersonalDetails, deletePlacements, deleteProject, deleteSocialLinks, deleteStudentDegreePartner, getAcademicHistory, getAchievementsById, getAllAchievements, getAllCertifications, getAllPlacements, getAllProjects, getAllSocialLinks, getCertificationById, getPersonalDetails, getPlacementsById, getProjectById, getSocialLinksById, getStudentAcademicDetails, getStudentDegreePartner, getStudentProfiles, updateAchievements, updateCertification, updatePersonalDetails, updatePlacements, updateProject, updateSocialLinks, updateStudentDegreePartner } from "../controllers/studentprofiles.controller.js";
+import { createAchievement, createCertification, createOrUpdateAcademicHistory, createPersonalDetails, createPlacements, createProject, createSocialLinks, createStudentDegreePartner, deleteAcademicHistory, deleteAchievements, deleteCertification, deletePersonalDetails, deletePlacements, deleteProject, deleteSocialLinks, deleteStudentDegreePartner, getAcademicHistory, getAchievementsById, getAllAchievements, getAllCertifications, getAllPlacements, getAllProjects, getAllSocialLinks, getCertificationById, getPersonalDetails, getPlacementsById, getProjectById, getSocialLinksById, getStudentAcademicDetails, getStudentContactInfo, getStudentDegreePartner, getStudentProfiles, updateAchievements, updateCertification, updatePersonalDetails, updatePlacements, updateProject, updateSocialLinks, updateStudentAddress, updateStudentDegreePartner } from "../controllers/studentprofiles.controller.js";
 
 const studentProfileRoutes=Router();
 
@@ -53,6 +53,9 @@ studentProfileRoutes.get("/:studentId/degree-partner", authenticateJwt, getStude
 studentProfileRoutes.put("/:studentId/degree-partner", authenticateJwt, requireRoles("STUDENT"), updateStudentDegreePartner)
 studentProfileRoutes.delete("/:studentId/degree-partner", authenticateJwt, requireRoles("STUDENT"), deleteStudentDegreePartner)
 
+
+studentProfileRoutes.get("/:studentId/contact",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","STUDENT"),getStudentContactInfo);
+studentProfileRoutes.put("/:studentId/address",authenticateJwt,requireRoles("STUDENT", "ADMIN", "SUPER_ADMIN"),updateStudentAddress);
 
 
 studentProfileRoutes.get("/:studentId/profile",getStudentProfiles)
