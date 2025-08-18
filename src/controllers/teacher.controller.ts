@@ -5,6 +5,7 @@ import XLSX from "xlsx";
 import { AppError } from "../utils/AppError.js";
 import type { UserRole } from "../auth/types.js";
 import { Gender, TeacherRole } from "@prisma/client";
+import { z } from "zod";
 
 // --- Constants --- //
 const MAX_BATCH_SIZE = 1000;
@@ -311,3 +312,284 @@ export const permanentlyDeleteTeacher = catchAsync(async (req: Request, res: Res
     message: `Teacher ${teacher.name} deleted successfully`,
   });
 });
+
+
+const teacherExperienceCreateSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  company_name: z.string().min(1, "Company name is required"),
+  location: z.string().optional().transform(val => val ?? null),
+  work_mode: z.enum(["HYBRID", "ONSITE", "REMOTE"]),
+  start_date: z.coerce.date(),
+  end_date: z.coerce.date().optional().transform(val => val ?? null),
+  description: z.string().optional().transform(val => val ?? null),
+});
+
+
+const teacherExperienceUpdateSchema = teacherExperienceCreateSchema.partial();
+
+export const addTeacherExperience = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const parsed = teacherExperienceCreateSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: "fail",
+        errors: parsed.error.format(),
+      });
+    }
+
+    const experience = await prisma.teacherExperience.create({
+      data: {
+        teacher_id: user.sub,
+        ...parsed.data,
+      },
+    });
+
+    res.status(201).json({ status: "success", data: experience });
+  }
+);
+
+export const updateTeacherExperience = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const experienceId = req.params.id;
+
+    if (!experienceId) {
+      throw new AppError("Experience Id required", 400);
+    }
+
+    const experience = await prisma.teacherExperience.findUnique({
+      where: { id: experienceId },
+    });
+
+    if (!experience || experience.teacher_id !== user.sub) {
+      throw new AppError("Experience not found or not yours", 404);
+    }
+
+    const parsed = teacherExperienceUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: "fail",
+        errors: parsed.error.format(),
+      });
+    }
+
+    // ✅ make sure empty strings become null in DB
+    const cleanedData = Object.fromEntries(
+      Object.entries(parsed.data).map(([key, value]) => [
+        key,
+        value === "" ? null : value,
+      ])
+    );
+
+    const updatedExperience = await prisma.teacherExperience.update({
+      where: { id: experienceId },
+      data: cleanedData,
+    });
+
+    res.json({ status: "success", data: updatedExperience });
+  }
+);
+
+
+export const deleteTeacherExperience = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const experienceId = req.params.id;
+    if(!experienceId){
+    throw new AppError("Experience Id required",400)
+  }
+    const experience = await prisma.teacherExperience.findUnique({
+      where: { id: experienceId },
+    });
+    if (!experience || experience.teacher_id !== user.sub) {
+      throw new AppError("Experience not found or not yours", 404);
+    }
+
+    await prisma.teacherExperience.delete({ where: { id: experienceId } });
+    res.status(204).json({ status: "success", data: null });
+  }
+);
+
+export const getTeacherAllExperience = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const experiences = await prisma.teacherExperience.findMany({
+      where: { teacher_id: user.sub },
+      orderBy: { start_date: "desc" },
+    });
+    res.json({ status: "success", results: experiences.length, data: experiences });
+  }
+);
+
+export const getTeacherExperienceById = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const experienceId = req.params.id;
+    if(!experienceId){
+    throw new AppError("Experience Id required",400)
+  }
+
+    const experience = await prisma.teacherExperience.findUnique({
+      where: { id: experienceId },
+    });
+    if (!experience || experience.teacher_id !== user.sub) {
+      throw new AppError("Experience not found or not yours", 404);
+    }
+    res.json({ status: "success", data: experience });
+  }
+);
+
+const researchPaperCreateSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  abstract: z.string().optional().transform(val => val ?? null),
+  publication_date: z.coerce.date().optional().transform(val => val ?? null),
+  journal_name: z.string().optional().transform(val => val ?? null),
+  doi: z.string().optional().transform(val => val ?? null),
+  url: z.string().optional().transform(val => val ?? null),
+});
+
+const researchPaperUpdateSchema = researchPaperCreateSchema.partial();
+
+
+async function verifyTeacherOwnership(userId: string, researchPaperId: string) {
+  const association = await prisma.teacherResearchPaper.findFirst({
+    where: { teacher_id: userId, research_paper_id: researchPaperId },
+  });
+  if (!association) throw new AppError("Research paper not found or not yours", 404);
+}
+
+
+// 1. Add Teacher Research Paper
+export const addTeacherResearchPapers = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const parsed = researchPaperCreateSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: "fail",
+        errors: parsed.error.format(),
+      });
+    }
+
+    // ✅ keep type safety
+    const cleanedData: typeof parsed.data = Object.fromEntries(
+      Object.entries(parsed.data).map(([key, value]) => [
+        key,
+        value === "" ? null : value,
+      ])
+    ) as typeof parsed.data;
+
+    const paper = await prisma.researchPaper.create({
+      data: cleanedData,
+    });
+
+    await prisma.teacherResearchPaper.create({
+      data: {
+        teacher_id: user.sub,
+        research_paper_id: paper.id,
+      },
+    });
+
+    res.status(201).json({ status: "success", data: paper });
+  }
+);
+
+export const updateTeacherResearchPaper = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const { researchPaperId } = req.params;
+
+    if (!researchPaperId) {
+      throw new AppError("ResearchPaper Id required", 400);
+    }
+
+    const parsed = researchPaperUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        status: "fail",
+        errors: parsed.error.format(),
+      });
+    }
+
+    await verifyTeacherOwnership(user.sub, researchPaperId);
+
+    // ✅ Convert parsed data into Prisma update format
+    const cleanedData = Object.fromEntries(
+      Object.entries(parsed.data).map(([key, value]) => [
+        key,
+        value === "" || value === undefined ? { set: null } : { set: value },
+      ])
+    );
+
+    const updatedPaper = await prisma.researchPaper.update({
+      where: { id: researchPaperId },
+      data: cleanedData,
+    });
+
+    res.json({ status: "success", data: updatedPaper });
+  }
+);
+
+
+export const deleteTeacherResearhPaper = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const { researchPaperId } = req.params;
+    if(!researchPaperId){
+      throw new AppError("ResearchPaper Id Required",400)
+    }
+
+    await verifyTeacherOwnership(user.sub, researchPaperId);
+
+    await prisma.teacherResearchPaper.deleteMany({
+      where: {
+        research_paper_id: researchPaperId,
+        teacher_id: user.sub,
+      },
+    });
+
+    const stillAssociated = await prisma.teacherResearchPaper.findMany({
+      where: { research_paper_id: researchPaperId },
+    });
+    if (stillAssociated.length === 0) {
+      await prisma.researchPaper.delete({ where: { id: researchPaperId } });
+    }
+
+    res.status(204).json({ status: "success", data: null });
+  }
+);
+
+export const getTeacherAllResearchPapers = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const papers = await prisma.researchPaper.findMany({
+      where: {
+        teacherResearchPapers: { some: { teacher_id: user.sub } },
+      },
+      orderBy: { publication_date: "desc" },
+    });
+    res.json({ status: "success", results: papers.length, data: papers });
+  }
+);
+
+export const getTeacherResearchPaperById = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user!;
+    const { researchPaperId } = req.params;
+  
+    if(!researchPaperId){
+      throw new AppError("ResearchPaper Id Required",400)
+    }
+    await verifyTeacherOwnership(user.sub, researchPaperId);
+
+    const paper = await prisma.researchPaper.findUnique({
+      where: { id: researchPaperId },
+    });
+    if (!paper) throw new AppError("Research paper not found", 404);
+
+    res.json({ status: "success", data: paper });
+  }
+);
