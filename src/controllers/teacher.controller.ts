@@ -6,9 +6,10 @@ import { AppError } from "../utils/AppError.js";
 import type { UserRole } from "../auth/types.js";
 import { Gender, TeacherRole } from "@prisma/client";
 import { z } from "zod";
+import { getActiveSubjectsWithAttendance } from "../service/getActiveSubjectsAttendanceService.js";
 
 const MAX_BATCH_SIZE = 1000;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; 
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 interface TeacherInput {
   name: string;
@@ -276,7 +277,7 @@ export const createTeachersFromExcel = catchAsync(async (req: Request, res: Resp
 });
 export const getTeacherById = catchAsync(async (req: Request, res: Response) => {
   const { teacherId } = req.params;
-  
+
   if (!teacherId) {
     throw new AppError("teacherId is required", 400);
   }
@@ -325,7 +326,7 @@ export const getTeacherById = catchAsync(async (req: Request, res: Response) => 
 
 export const getTeachersByCenterId = catchAsync(async (req: Request, res: Response) => {
   const { centerId } = req.params;
-  
+
   if (!centerId) {
     throw new AppError("centerId is required", 400);
   }
@@ -366,16 +367,16 @@ export const getTeachersByCenterId = catchAsync(async (req: Request, res: Respon
 
 export const getTeachersBySchoolId = catchAsync(async (req: Request, res: Response) => {
   const { schoolId } = req.params;
-  
+
   if (!schoolId) {
     throw new AppError("schoolId is required", 400);
   }
 
   const school = await prisma.school.findUnique({
     where: { id: schoolId },
-    select: { 
-      id: true, 
-      name: true, 
+    select: {
+      id: true,
+      name: true,
       center: {
         select: {
           id: true,
@@ -524,14 +525,23 @@ export const updateTeacherExperience = catchAsync(
   }
 );
 
-
+export const getActiveSubjectAttendance = catchAsync(
+  async (req: Request, res: Response) => {
+    const teacherId = req.user!.sub;
+    if (!teacherId) {
+      return res.status(400).json({ message: 'Teacher ID not found in token.' });
+    }
+    const subjects = await getActiveSubjectsWithAttendance(teacherId);
+    res.status(200).json(subjects);
+  }
+)
 export const deleteTeacherExperience = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
     const experienceId = req.params.id;
-    if(!experienceId){
-    throw new AppError("Experience Id required",400)
-  }
+    if (!experienceId) {
+      throw new AppError("Experience Id required", 400)
+    }
     const experience = await prisma.teacherExperience.findUnique({
       where: { id: experienceId },
     });
@@ -559,9 +569,9 @@ export const getTeacherExperienceById = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
     const experienceId = req.params.id;
-    if(!experienceId){
-    throw new AppError("Experience Id required",400)
-  }
+    if (!experienceId) {
+      throw new AppError("Experience Id required", 400)
+    }
 
     const experience = await prisma.teacherExperience.findUnique({
       where: { id: experienceId },
@@ -716,8 +726,8 @@ export const deleteTeacherResearhPaper = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
     const { researchPaperId } = req.params;
-    if(!researchPaperId){
-      throw new AppError("ResearchPaper Id Required",400)
+    if (!researchPaperId) {
+      throw new AppError("ResearchPaper Id Required", 400)
     }
 
     await verifyTeacherOwnership(user.sub, researchPaperId);
@@ -757,9 +767,9 @@ export const getTeacherResearchPaperById = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
     const { researchPaperId } = req.params;
-  
-    if(!researchPaperId){
-      throw new AppError("ResearchPaper Id Required",400)
+
+    if (!researchPaperId) {
+      throw new AppError("ResearchPaper Id Required", 400)
     }
     await verifyTeacherOwnership(user.sub, researchPaperId);
 

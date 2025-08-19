@@ -9,6 +9,7 @@ import {
   createTeachersFromExcel,
   deleteTeacherExperience,
   deleteTeacherResearhPaper,
+  getActiveSubjectAttendance,
   getTeacherAllExperience,
   getTeacherAllResearchPapers,
   getTeacherById,
@@ -49,5 +50,5 @@ teacherRoutes.get("/profile/research-papers/:researchPaperId",authenticateJwt,ge
 
 
 
-
+teacherRoutes.get("/me/active-subject-attendance",authenticateJwt,requireRoles("TEACHER"),getActiveSubjectAttendance)
 export default teacherRoutes;
