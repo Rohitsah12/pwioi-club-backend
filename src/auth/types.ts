@@ -16,4 +16,5 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   designation?: string;
+  phone:string;
 }

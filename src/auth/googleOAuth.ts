@@ -147,6 +147,7 @@ export async function authenticateUserWithGoogle(
         email: userRecord.email,
         role: userRecord.role.role as UserRole,
         designation: userRecord.designation ?? "",
+        phone:userRecord.phone
       };
     } else if (
       role === TeacherRole.TEACHER ||
@@ -171,6 +172,7 @@ export async function authenticateUserWithGoogle(
         email: userRecord.email,
         role: userRecord.role as TeacherRole,
         designation: userRecord.designation || "",
+        phone:userRecord.phone
       };
     } else if (role === "STUDENT") {
       const userRecord = await prisma.student.findUnique({
@@ -191,6 +193,7 @@ export async function authenticateUserWithGoogle(
         name: userRecord.name,
         email: userRecord.email,
         role: "STUDENT",
+        phone:userRecord.phone
       };
     } else {
       throw new AppError("Invalid role specified", 400);

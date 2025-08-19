@@ -12,9 +12,10 @@ export function signJwt(user: AuthUser): string {
       name: user.name,
       role: user.role,
       designation: user.designation,
+      phone:user.phone
     },
     JWT_SECRET,
-    { expiresIn: "2h" }
+    { expiresIn: "7d" }
   );
 }
 

@@ -11,6 +11,7 @@ declare global {
         name: string;
         role: UserRole;
         designation?: string;
+        phone:string
       };
     }
   }
@@ -27,6 +28,7 @@ export function authenticateJwt(req: express.Request, res: express.Response, nex
       email: payload.email,
       name: payload.name,
       role: payload.role as UserRole,
+      phone:payload.phone,
       ...(payload.designation !== undefined && { designation: payload.designation })
     };
     next();
