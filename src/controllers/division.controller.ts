@@ -221,26 +221,7 @@ export const getDivisionBatch = catchAsync(async (
     }
 
     const centerId = batch.center_id;
-
-    // Allow ADMIN and SUPER_ADMIN full access, keep TEACHER restriction
-    if (role === AuthorRole.TEACHER) {
-        // Check if teacher belongs to the batch center
-        const teacher = await prisma.teacher.findUnique({
-            where: { id: sub },
-            select: { center_id: true }
-        });
-
-        if (!teacher) {
-            throw new AppError("Teacher not found", 404);
-        }
-
-        if (teacher.center_id !== centerId) {
-            throw new AppError("Not authorized to access divisions of this batch", 403);
-        }
-    } else if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("Role not permitted to access divisions", 403);
-    }
-
+   
     const divisions = await prisma.division.findMany({
         where: { batch_id: batchId },
         orderBy: { code: "asc" }
@@ -274,11 +255,6 @@ export const getDivisionBySchool = catchAsync(async (
         throw new AppError("School not found", 404);
     }
 
-    // Allow both ADMIN and SUPER_ADMIN full access
-    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("Role not permitted to access divisions", 403);
-    }
-
     const divisions = await prisma.division.findMany({
         where: { school_id: schoolId },
         orderBy: { code: "asc" }
@@ -300,11 +276,6 @@ export const getDivisionByCenter = catchAsync(async (
 
     if (!centerId) {
         throw new AppError("centerId is required", 400);
-    }
-
-    // Allow both ADMIN and SUPER_ADMIN full access
-    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("Role not permitted to access divisions", 403);
     }
 
     const divisions = await prisma.division.findMany({
@@ -330,7 +301,6 @@ export const getDivisionDetails = catchAsync(async (
     throw new AppError("divisionId is required", 400);
   }
 
-  // Check division existence and get center_id for authorization
   const divisionExists = await prisma.division.findUnique({
     where: { id: divisionId },
     select: { id: true, center_id: true }
@@ -340,10 +310,6 @@ export const getDivisionDetails = catchAsync(async (
     throw new AppError("Division not found", 404);
   }
 
-  // Allow both ADMIN and SUPER_ADMIN full access
-  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
-    throw new AppError("Role not permitted to access division details", 403);
-  }
 
   // Fetch division details without relations
   const division = await prisma.division.findUnique({
@@ -354,7 +320,6 @@ export const getDivisionDetails = catchAsync(async (
     throw new AppError("Division not found", 404);
   }
 
-  // Count number of students in the division
   const studentCount = await prisma.student.count({
     where: { division_id: divisionId }
   });

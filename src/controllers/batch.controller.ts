@@ -226,10 +226,6 @@ export const getBatchDetails = catchAsync(async (
     throw new AppError("Batch not found", 404);
   }
 
-  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
-    throw new AppError("Role not permitted to access batch details", 403);
-  }
-
   const [studentCount, divisionCount] = await Promise.all([
     prisma.student.count({ where: { batch_id: batchId } }),
     prisma.division.count({ where: { batch_id: batchId } }),

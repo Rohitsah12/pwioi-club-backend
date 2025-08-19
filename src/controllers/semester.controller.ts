@@ -93,38 +93,18 @@ export const getAllSemester = catchAsync(async (
     res: Response
 ) => {
     const { divisionId } = req.params;
-    const { role, sub } = req.user!;
 
     if (!divisionId) {
         throw new AppError("divisionId is required", 400);
     }
 
-    // Fetch division and its center_id for validation
     const division = await prisma.division.findUnique({
         where: { id: divisionId },
-        select: { center_id: true }
+        select: { id: true }
     });
 
     if (!division) {
         throw new AppError("Division not found", 404);
-    }
-
-    // Allow ADMIN and SUPER_ADMIN full access, keep TEACHER restriction
-    if (role === AuthorRole.TEACHER) {
-        const teacher = await prisma.teacher.findUnique({
-            where: { id: sub },
-            select: { center_id: true }
-        });
-
-        if (!teacher) {
-            throw new AppError("Teacher not found", 404);
-        }
-
-        if (teacher.center_id !== division.center_id) {
-            throw new AppError("Not authorized to access semesters of this division", 403);
-        }
-    } else if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("Role not permitted to access semesters", 403);
     }
 
     const semesters = await prisma.semester.findMany({
@@ -138,6 +118,7 @@ export const getAllSemester = catchAsync(async (
         data: semesters
     });
 });
+
 
 interface UpdateSemesterRequest {
     number?: number;
@@ -365,18 +346,16 @@ export const getSemesterDetails = catchAsync(async (
   res: Response
 ) => {
   const { semesterId } = req.params;
-  const { role } = req.user!;
 
   if (!semesterId) {
     throw new AppError("semesterId is required", 400);
   }
 
-  // Fetch semester with division and subjects relations
   const semester = await prisma.semester.findUnique({
     where: { id: semesterId },
     include: {
       division: { select: { center_id: true } },
-      subjects: true // fetch subjects directly related to semester
+      subjects: true
     }
   });
 
@@ -384,22 +363,14 @@ export const getSemesterDetails = catchAsync(async (
     throw new AppError("Semester not found", 404);
   }
 
-  // Check if division exists (null safety)
   if (!semester.division) {
     throw new AppError("Semester division not found", 404);
   }
 
-  // Allow both ADMIN and SUPER_ADMIN full access
-  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
-    throw new AppError("Role not permitted to access semester details", 403);
-  }
-
-  // Count of students in semester (assuming student has semester_id)
   const studentCount = await prisma.student.count({
     where: { semester_id: semesterId }
   });
 
-  // Count subjects directly related to this semester
   const subjectCount = semester.subjects.length;
 
   res.status(200).json({
