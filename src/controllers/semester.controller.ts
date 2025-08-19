@@ -16,7 +16,7 @@ export const createSemester = catchAsync(async (
     res: Response
 ) => {
     const { divisionId, number, startDate, endDate } = req.body;
-    const { role, sub } = req.user!;
+    const { role } = req.user!;
 
     if (!divisionId || !number || !startDate || !endDate) {
         throw new AppError("divisionId, number, startDate and endDate are required", 400);
@@ -59,20 +59,8 @@ export const createSemester = catchAsync(async (
         throw new AppError("Semester dates must be within the division's start_date and end_date", 400);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: division.center_id },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to create semester in this division", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to create semester", 403);
     }
 
@@ -121,20 +109,8 @@ export const getAllSemester = catchAsync(async (
         throw new AppError("Division not found", 404);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: division.center_id },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to access semesters of this division", 403);
-        }
-    } else if (role === AuthorRole.TEACHER) {
+    // Allow ADMIN and SUPER_ADMIN full access, keep TEACHER restriction
+    if (role === AuthorRole.TEACHER) {
         const teacher = await prisma.teacher.findUnique({
             where: { id: sub },
             select: { center_id: true }
@@ -147,7 +123,7 @@ export const getAllSemester = catchAsync(async (
         if (teacher.center_id !== division.center_id) {
             throw new AppError("Not authorized to access semesters of this division", 403);
         }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    } else if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to access semesters", 403);
     }
 
@@ -162,6 +138,7 @@ export const getAllSemester = catchAsync(async (
         data: semesters
     });
 });
+
 interface UpdateSemesterRequest {
     number?: number;
     startDate?: string; // ISO string
@@ -174,14 +151,13 @@ export const updateSemester = catchAsync(async (
 ) => {
     const semesterIdParam = req.params.semesterId;
     const { number, startDate, endDate } = req.body as UpdateSemesterRequest;
-    const { role, sub } = req.user!;
+    const { role } = req.user!;
 
     if (!semesterIdParam || typeof semesterIdParam !== 'string') {
         throw new AppError("semesterId is required", 400);
     }
 
     const semesterId: string = semesterIdParam;
-
 
     const semester = await prisma.semester.findUnique({
         where: { id: semesterId },
@@ -201,18 +177,8 @@ export const updateSemester = catchAsync(async (
         throw new AppError("Division not found", 404);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: division.center_id },
-            select: { business_head: true, academic_head: true }
-        });
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to update this semester", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to update semester", 403);
     }
 
@@ -313,7 +279,7 @@ export const deleteDivision = catchAsync(async (
     res: Response
 ) => {
     const { divisionId } = req.params;
-    const { role, sub } = req.user!;
+    const { role } = req.user!;
 
     if (!divisionId) {
         throw new AppError("divisionId is required", 400);
@@ -329,20 +295,8 @@ export const deleteDivision = catchAsync(async (
         throw new AppError("Division not found", 404);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: division.center_id },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to delete this division", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to delete division", 403);
     }
 
@@ -362,7 +316,7 @@ export const deleteSemester = catchAsync(async (
     res: Response
 ) => {
     const { semesterId } = req.params;
-    const { role, sub } = req.user!;
+    const { role } = req.user!;
 
     if (!semesterId) {
         throw new AppError("semesterId is required", 400);
@@ -390,20 +344,8 @@ export const deleteSemester = catchAsync(async (
         throw new AppError("Division not found", 404);
     }
 
-    if (role === AuthorRole.ADMIN) {
-        const center = await prisma.center.findUnique({
-            where: { id: division.center_id },
-            select: { business_head: true, academic_head: true }
-        });
-
-        if (!center) {
-            throw new AppError("Center not found", 404);
-        }
-
-        if (center.business_head !== sub && center.academic_head !== sub) {
-            throw new AppError("Not authorized to delete this semester", 403);
-        }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
+    // Allow both ADMIN and SUPER_ADMIN full access
+    if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to delete semester", 403);
     }
 
@@ -423,7 +365,7 @@ export const getSemesterDetails = catchAsync(async (
   res: Response
 ) => {
   const { semesterId } = req.params;
-  const { role, sub } = req.user!;
+  const { role } = req.user!;
 
   if (!semesterId) {
     throw new AppError("semesterId is required", 400);
@@ -447,21 +389,8 @@ export const getSemesterDetails = catchAsync(async (
     throw new AppError("Semester division not found", 404);
   }
 
-  // Role-based access
-  if (role === AuthorRole.ADMIN) {
-    const center = await prisma.center.findUnique({
-      where: { id: semester.division.center_id },
-      select: { business_head: true, academic_head: true }
-    });
-
-    if (!center) {
-      throw new AppError("Center not found", 404);
-    }
-
-    if (center.business_head !== sub && center.academic_head !== sub) {
-      throw new AppError("Not authorized to access this semester", 403);
-    }
-  } else if (role !== AuthorRole.SUPER_ADMIN) {
+  // Allow both ADMIN and SUPER_ADMIN full access
+  if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
     throw new AppError("Role not permitted to access semester details", 403);
   }
 

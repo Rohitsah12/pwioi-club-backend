@@ -26,7 +26,7 @@ interface ValidationError {
   row: number;
   data: Omit<StudentInput, 'gender'> & { gender?: string };
   error: string;
-  field?: string|undefined;
+  field?: string | undefined;
 }
 
 interface ProcessingResult {
@@ -62,7 +62,6 @@ interface ExistingConflict {
   conflictType: string | undefined;
   existingId?: string | undefined;
 }
-
 
 // --- Helper Functions --- //
 
@@ -111,6 +110,7 @@ async function validateSemesterDivision(semesterId: string, divisionId: string):
 
 /**
  * Authorizes if an admin has access to a center's division.
+ * Both ADMIN and SUPER_ADMIN now have full access to all centers.
  * @param centerId The center ID to check against.
  * @param role The user's role.
  * @param adminId The user's ID (if an admin).
@@ -120,24 +120,12 @@ async function authorizeDivisionAccess(
   role: UserRole,
   adminId: string | undefined
 ): Promise<void> {
-  if (role === AuthorRole.SUPER_ADMIN) {
-    return; // Super admin has universal access
+  // Both ADMIN and SUPER_ADMIN have universal access to all centers
+  if (role === AuthorRole.SUPER_ADMIN || role === AuthorRole.ADMIN) {
+    return;
   }
   
-  if (role === AuthorRole.ADMIN) {
-    const center = await prisma.center.findUnique({
-      where: { id: centerId },
-      select: { business_head: true, academic_head: true },
-    });
-
-    if (!center) throw new AppError("Center not found", 404);
-
-    if (center.business_head !== adminId && center.academic_head !== adminId) {
-      throw new AppError("Not authorized for this center's division", 403);
-    }
-  } else {
-    throw new AppError("Your role is not permitted to create students", 403);
-  }
+  throw new AppError("Your role is not permitted to perform this action", 403);
 }
 
 /**
@@ -279,7 +267,7 @@ function sanitizeStudentData(student: any): PublicStudentData {
     phone: student.phone,
     enrollment_id: student.enrollment_id,
     is_active: student.is_active,
-    createdAt: student.createdAt // Corrected to use camelCase from Prisma client
+    createdAt: student.createdAt
   };
 }
 
@@ -339,7 +327,6 @@ async function bulkInsertStudents(
     throw new AppError("Failed to create students in the database", 500);
   }
 }
-
 
 // --- Controllers --- //
 
@@ -421,7 +408,6 @@ export const bulkCreateStudents = catchAsync(async (req: Request, res: Response)
 
   return res.status(created.length ? 201 : 400).json(result);
 });
-
 
 /**
  * @desc    Create students from an uploaded Excel file
@@ -524,7 +510,6 @@ export const createStudentsFromExcel = catchAsync(async (req: Request, res: Resp
   return res.status(created.length ? 201 : 400).json(result);
 });
 
-
 /**
  * @desc    Soft delete (deactivate) a student
  * @route   PATCH /api/students/:studentId/deactivate
@@ -546,7 +531,7 @@ export const softDeleteStudent = catchAsync(async (req: Request, res: Response) 
         throw new AppError("Student not found", 404);
     }
 
-    // Authorize the action based on the student's center
+    // Authorize the action - both ADMIN and SUPER_ADMIN have access to all centers
     await authorizeDivisionAccess(student.center_id, role, sub);
 
     if (!student.is_active) {
@@ -595,7 +580,6 @@ export const permanentlyDeleteStudent = catchAsync(async (req: Request, res: Res
 
     res.status(204).send(); // 204 No Content is standard for successful deletions
 });
-
 
 /**
  * @desc    Scheduled job to clean up students deactivated for more than 30 days.

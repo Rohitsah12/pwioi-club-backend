@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js";
-import { createAchievement, createCertification, createOrUpdateAcademicHistory, createPersonalDetails, createPlacements, createProject, createSocialLinks, deleteAcademicHistory, deleteAchievements, deleteCertification, deletePersonalDetails, deletePlacements, deleteProject, deleteSocialLinks, getAcademicHistory, getAchievementsById, getAllAchievements, getAllCertifications, getAllPlacements, getAllProjects, getAllSocialLinks, getCertificationById, getPersonalDetails, getPlacementsById, getProjectById, getSocialLinksById, getStudentProfiles, updateAchievements, updateCertification, updatePersonalDetails, updatePlacements, updateProject, updateSocialLinks } from "../controllers/studentprofiles.controller.js";
+import { createAchievement, createCertification, createOrUpdateAcademicHistory, createPersonalDetails, createPlacements, createProject, createSocialLinks, createStudentDegreePartner, deleteAcademicHistory, deleteAchievements, deleteCertification, deletePersonalDetails, deletePlacements, deleteProject, deleteSocialLinks, deleteStudentDegreePartner, getAcademicHistory, getAchievementsById, getAllAchievements, getAllCertifications, getAllPlacements, getAllProjects, getAllSocialLinks, getCertificationById, getPersonalDetails, getPlacementsById, getProjectById, getSocialLinksById, getStudentAcademicDetails, getStudentContactInfo, getStudentDegreePartner, getStudentProfiles, updateAchievements, updateCertification, updatePersonalDetails, updatePlacements, updateProject, updateSocialLinks, updateStudentAddress, updateStudentDegreePartner } from "../controllers/studentprofiles.controller.js";
 
 const studentProfileRoutes=Router();
 
+studentProfileRoutes.get("/:studentId/basic-details",authenticateJwt,requireRoles("STUDENT"),getStudentAcademicDetails)
 
 studentProfileRoutes.post("/:studentId/personal-details",authenticateJwt,requireRoles("STUDENT"),createPersonalDetails)
 studentProfileRoutes.get("/:studentId/personal-details",authenticateJwt,getPersonalDetails)
@@ -46,6 +47,15 @@ studentProfileRoutes.get("/:studentId/social-links/:socialLinkId",authenticateJw
 studentProfileRoutes.post("/:studentId/social-links",authenticateJwt,requireRoles("STUDENT"),createSocialLinks)
 studentProfileRoutes.patch("/:studentId/social-links/:socialLinkId",authenticateJwt,requireRoles("STUDENT"),updateSocialLinks)
 studentProfileRoutes.delete("/:studentId/social-links/:socialLinkId",authenticateJwt,requireRoles("STUDENT"),deleteSocialLinks)
+
+studentProfileRoutes.post("/:studentId/degree-partner", authenticateJwt, requireRoles("STUDENT"), createStudentDegreePartner)
+studentProfileRoutes.get("/:studentId/degree-partner", authenticateJwt, getStudentDegreePartner)
+studentProfileRoutes.put("/:studentId/degree-partner", authenticateJwt, requireRoles("STUDENT"), updateStudentDegreePartner)
+studentProfileRoutes.delete("/:studentId/degree-partner", authenticateJwt, requireRoles("STUDENT"), deleteStudentDegreePartner)
+
+
+studentProfileRoutes.get("/:studentId/contact",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","STUDENT"),getStudentContactInfo);
+studentProfileRoutes.put("/:studentId/address",authenticateJwt,requireRoles("STUDENT", "ADMIN", "SUPER_ADMIN"),updateStudentAddress);
 
 
 studentProfileRoutes.get("/:studentId/profile",getStudentProfiles)

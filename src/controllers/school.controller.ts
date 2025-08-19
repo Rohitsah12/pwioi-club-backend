@@ -1,4 +1,4 @@
-import type { Request, Response ,NextFunction} from "express";
+import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../db/prisma.js";
 import { AppError } from "../utils/AppError.js";
 import { AuthorRole } from "../types/postApi.js";
@@ -6,12 +6,12 @@ import { catchAsync } from "../utils/catchAsync.js";
 
 interface CreateSchoolsBody {
   centerId: string;
-  schoolNames: string[]; 
+  schoolNames: string[];
 }
 
 export const createSchools = catchAsync(async (req: Request<{}, {}, CreateSchoolsBody>, res: Response, next: NextFunction) => {
   const { centerId, schoolNames } = req.body;
-  const { role, sub } = req.user!;
+  const { role } = req.user!;
 
   if (!centerId || !Array.isArray(schoolNames) || schoolNames.length === 0) {
     throw new AppError("centerId and non-empty schoolNames array are required", 400);
@@ -26,17 +26,13 @@ export const createSchools = catchAsync(async (req: Request<{}, {}, CreateSchool
     }
   }
 
-  if (role === AuthorRole.SUPER_ADMIN) {
-  } else if (role === AuthorRole.ADMIN) {
+  // ADMIN and SUPER_ADMIN can add schools to any center
+  if (role === AuthorRole.SUPER_ADMIN || role === AuthorRole.ADMIN) {
+    // check center exists
     const center = await prisma.center.findUnique({
-      where: { id: centerId },
-      select: { business_head: true, academic_head: true }
+      where: { id: centerId }
     });
     if (!center) throw new AppError("Center not found", 404);
-
-    if (center.business_head !== sub && center.academic_head !== sub) {
-      throw new AppError("Not authorized to add schools to this center", 403);
-    }
   } else {
     throw new AppError("Role not allowed to add schools", 403);
   }
@@ -69,127 +65,85 @@ export const createSchools = catchAsync(async (req: Request<{}, {}, CreateSchool
   });
 });
 
-
 export const getAllSchools = catchAsync(async (
   req: Request,
   res: Response
 ) => {
   const { centerId } = req.params;
-
   if (!centerId) {
     throw new AppError("centerId required", 400);
   }
-
   const { role, sub } = req.user!;
 
-  if (role === AuthorRole.SUPER_ADMIN) {
+  // ADMIN and SUPER_ADMIN can access all centers' schools
+  if (role === AuthorRole.SUPER_ADMIN || role === AuthorRole.ADMIN) {
     const schools = await prisma.school.findMany({
       where: { center_id: centerId },
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     });
-
     return res.status(200).json({ success: true, count: schools.length, data: schools });
   }
 
-  if (role === AuthorRole.ADMIN) {
-    const center = await prisma.center.findUnique({
-      where: { id: centerId },
-      select: { business_head: true, academic_head: true }
-    });
-
-    if (!center) {
-      throw new AppError("Center not found", 404);
-    }
-
-    if (center.business_head !== sub && center.academic_head !== sub) {
-      throw new AppError("Not authorized to access schools of this center", 403);
-    }
-
-    const schools = await prisma.school.findMany({
-      where: { center_id: centerId },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true }
-    });
-
-    return res.status(200).json({ success: true, count: schools.length, data: schools });
-  }
-
+  // Teacher can only access their own center
   if (role === AuthorRole.TEACHER) {
     const teacher = await prisma.teacher.findUnique({
       where: { id: sub },
       select: { center_id: true }
     });
-
-    if (!teacher) {
-      throw new AppError("Teacher not found", 404);
-    }
-
+    if (!teacher) throw new AppError("Teacher not found", 404);
     if (teacher.center_id !== centerId) {
       throw new AppError("Not authorized to access schools of this center", 403);
     }
-
     const schools = await prisma.school.findMany({
       where: { center_id: centerId },
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     });
-
     return res.status(200).json({ success: true, count: schools.length, data: schools });
   }
 
   throw new AppError("Role not permitted", 403);
 });
-export const deleteSchool = catchAsync(
-  async (req: Request, res: Response) => {
-    const { schoolId } = req.params;
 
-    if (!schoolId) {
-      throw new AppError("schoolId is required", 400);
-    }
+export const deleteSchool = catchAsync(async (req: Request, res: Response) => {
+  const { schoolId } = req.params;
+  if (!schoolId) throw new AppError("schoolId is required", 400);
 
-    const { role, sub } = req.user!;
+  const { role } = req.user!;
 
-    const school = await prisma.school.findUnique({
-      where: { id: schoolId },
-      select: { id: true, center_id: true }
-    });
+  const school = await prisma.school.findUnique({
+    where: { id: schoolId },
+    select: { id: true, center_id: true }
+  });
+  if (!school) throw new AppError("School not found", 404);
 
-    if (!school) throw new AppError("School not found", 404);
+  const center = await prisma.center.findUnique({
+    where: { id: school.center_id }
+  });
+  if (!center) throw new AppError("Center not found", 404);
 
-    const center = await prisma.center.findUnique({
-      where: { id: school.center_id },
-      select: { business_head: true, academic_head: true }
-    });
-
-    if (!center) throw new AppError("Center not found", 404);
-
-    if (role === AuthorRole.ADMIN) {
-      if (center.business_head !== sub && center.academic_head !== sub) {
-        throw new AppError("Not authorized to delete school in this center", 403);
-      }
-    } else if (role !== AuthorRole.SUPER_ADMIN) {
-      throw new AppError("Role not permitted to delete schools", 403);
-    }
-
-    await prisma.school.delete({ where: { id: schoolId } });
-
-    res.status(200).json({
-      success: true,
-      message: "School deleted successfully"
-    });
+  // ADMIN and SUPER_ADMIN can delete schools in any center
+  if (role !== AuthorRole.SUPER_ADMIN && role !== AuthorRole.ADMIN) {
+    throw new AppError("Role not permitted to delete schools", 403);
   }
-);
+
+  await prisma.school.delete({ where: { id: schoolId } });
+  res.status(200).json({
+    success: true,
+    message: "School deleted successfully"
+  });
+});
+
 export const getSchoolStats = catchAsync(async (
   req: Request,
   res: Response
 ) => {
   const { schoolId } = req.params;
-
   if(!schoolId){
     throw new AppError("School Id required",400)
   }
-  const { role, sub } = req.user!;
+  const { role } = req.user!;
 
   const school = await prisma.school.findUnique({
     where: { id: schoolId },
@@ -202,12 +156,6 @@ export const getSchoolStats = catchAsync(async (
         select: {
           teacher: true
         }
-      },
-      center: {
-        select: {
-          business_head: true,
-          academic_head: true
-        }
       }
     }
   });
@@ -216,13 +164,8 @@ export const getSchoolStats = catchAsync(async (
     throw new AppError("School not found", 404);
   }
 
-  if (role === AuthorRole.ADMIN) {
-    const center = school.center;
-    if (!center) throw new AppError("Center not found", 404);
-    if (center.business_head !== sub && center.academic_head !== sub) {
-      throw new AppError("Not authorized to access this school's stats", 403);
-    }
-  } else if (role !== AuthorRole.SUPER_ADMIN) {
+  // ADMIN and SUPER_ADMIN can get stats in any center
+  if (role !== AuthorRole.SUPER_ADMIN && role !== AuthorRole.ADMIN) {
     throw new AppError("Role not permitted to access school stats", 403);
   }
 
@@ -250,12 +193,11 @@ export const updateSchool = catchAsync(async (
 ) => {
   const { schoolId } = req.params;
   const updates = req.body;
-  const { role, sub } = req.user!;
+  const { role } = req.user!;
 
   if (!schoolId) {
     throw new AppError("schoolId is required", 400);
   }
-
   if (updates.name !== undefined && typeof updates.name !== "string") {
     throw new AppError("Invalid name field", 400);
   }
@@ -269,20 +211,8 @@ export const updateSchool = catchAsync(async (
     throw new AppError("School not found", 404);
   }
 
-  if (role === AuthorRole.ADMIN) {
-    const center = await prisma.center.findUnique({
-      where: { id: school.center_id },
-      select: { business_head: true, academic_head: true }
-    });
-
-    if (!center) {
-      throw new AppError("Center not found", 404);
-    }
-
-    if (center.business_head !== sub && center.academic_head !== sub) {
-      throw new AppError("Not authorized to update this school", 403);
-    }
-  } else if (role !== AuthorRole.SUPER_ADMIN) {
+  // ADMIN and SUPER_ADMIN can update schools in any center
+  if (role !== AuthorRole.SUPER_ADMIN && role !== AuthorRole.ADMIN) {
     throw new AppError("Role not permitted to update school", 403);
   }
 
