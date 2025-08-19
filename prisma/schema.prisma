@@ -558,7 +558,38 @@ model Education {
   ugEducationHistory  AcademicHistory[] @relation("UndergradEducation")
   xEducationHistory   AcademicHistory[] @relation("XEducation")
   xiiEducationHistory AcademicHistory[] @relation("XIIEducation")
+  teacherXEducationHistory        TeacherAcademicHistory[] @relation("TeacherXEducation")
+  teacherXIIEducationHistory      TeacherAcademicHistory[] @relation("TeacherXIIEducation")
+  teacherUgEducationHistory       TeacherAcademicHistory[] @relation("TeacherUndergradEducation")
+  teacherPgEducationHistory       TeacherAcademicHistory[] @relation("TeacherPostgradEducation")
+  teacherDoctoralEducationHistory TeacherAcademicHistory[] @relation("TeacherDoctoralEducation")
 }
+
+model TeacherAcademicHistory {
+  id            String     @id @default(dbgenerated("gen_random_uuid()"))
+  teacher_id    String     @unique
+  x_education   String?    // Class 10th education
+  xii_education String?    // Class 12th education  
+  undergraduate String?    // Bachelor's degree
+  postgraduate  String?    // Master's degree (NEW - teachers might have this)
+  doctorate     String?    // PhD (NEW - teachers might have this)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @default(now()) @map("updated_at")
+  
+  teacher       Teacher    @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  xEducation    Education? @relation("TeacherXEducation", fields: [x_education], references: [id], onDelete: Cascade)
+  xiiEducation  Education? @relation("TeacherXIIEducation", fields: [xii_education], references: [id], onDelete: Cascade)
+  undergrad     Education? @relation("TeacherUndergradEducation", fields: [undergraduate], references: [id], onDelete: Cascade)
+  postgrad      Education? @relation("TeacherPostgradEducation", fields: [postgraduate], references: [id], onDelete: Cascade)
+  doctoralDegree Education? @relation("TeacherDoctoralEducation", fields: [doctorate], references: [id], onDelete: Cascade)
+
+  @@index([x_education], map: "teacher_academic_history_x_edu_idx")
+  @@index([xii_education], map: "teacher_academic_history_xii_edu_idx")
+  @@index([undergraduate], map: "teacher_academic_history_ug_edu_idx")
+  @@index([postgraduate], map: "teacher_academic_history_pg_edu_idx")
+  @@index([doctorate], map: "teacher_academic_history_doc_edu_idx")
+}
+
 
 model AcademicHistory {
   id            String     @id @default(dbgenerated("gen_random_uuid()"))
@@ -577,6 +608,8 @@ model AcademicHistory {
   @@index([xii_education], map: "academic_history_xii_edu_idx")
   @@index([undergraduate], map: "academic_history_ug_edu_idx")
 }
+
+
 
 model Achievement {
   id           String   @id @default(dbgenerated("gen_random_uuid()"))
@@ -793,6 +826,7 @@ model Teacher {
   designation        String?
   googleAccessToken  String?
   googleRefreshToken String?
+  about              String?   
   googleTokenExpiry  DateTime?
   lastLoginAt        DateTime?
   createdAt          DateTime               @default(now()) @map("created_at")
@@ -810,6 +844,7 @@ model Teacher {
   teacherExperiences TeacherExperience[]
   researchPapers     TeacherResearchPaper[]
   teacherSchools     TeacherSchool[]
+  academicHistory    TeacherAcademicHistory?
 
   @@index([center_id], map: "teacher_center_id_idx")
 }
