@@ -27,7 +27,7 @@ const updateSubjectSchema = z.object({
  */
 export const createSubject = catchAsync(async (req: Request, res: Response) => {
   const validation = createSubjectSchema.safeParse(req.body);
-  
+
   if (!validation.success) {
     return res.status(400).json({
       success: false,
@@ -98,12 +98,12 @@ export const createSubject = catchAsync(async (req: Request, res: Response) => {
 });
 
 
-export const getStudentsForSubject = async (req:Request, res:Response) => {
+export const getStudentsForSubject = async (req: Request, res: Response) => {
   const { subjectId } = req.params;
-  const teacherId = req.user!.sub; 
+  const teacherId = req.user!.id;
 
-  if(!subjectId){
-    throw new AppError("Subject Id Required",400)
+  if (!subjectId) {
+    throw new AppError("Subject Id Required", 400)
   }
 
   try {
@@ -129,7 +129,7 @@ export const getStudentsForSubject = async (req:Request, res:Response) => {
     const students = await prisma.student.findMany({
       where: {
         division_id: subject.semester.division_id,
-        is_active: true, 
+        is_active: true,
       },
       select: {
         name: true,
@@ -565,7 +565,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
   ] = await Promise.all([
     // Total subjects count
     prisma.subject.count(),
-    
+
     // Subjects grouped by credits
     prisma.subject.groupBy({
       by: ['credits'],
@@ -574,7 +574,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
       },
       orderBy: { credits: 'asc' }
     }),
-    
+
     // Subjects per semester
     prisma.subject.groupBy({
       by: ['semester_id'],
@@ -583,7 +583,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
       },
       orderBy: { _count: { id: 'desc' } }
     }),
-    
+
     // Subjects with most classes
     prisma.subject.findMany({
       select: {
@@ -598,7 +598,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
         classes: { _count: 'desc' }
       }
     }),
-    
+
     // Subjects with most exams
     prisma.subject.findMany({
       select: {

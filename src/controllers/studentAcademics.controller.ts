@@ -29,7 +29,7 @@ export const getStudentPerformanceTrends = catchAsync(
       return next(new AppError("Invalid query parameters", 400));
     }
     const { semester_id, subject_id, exam_type, exam_name } = parseResult.data;
-    const studentId = req.user!.sub;
+    const studentId = req.user!.id;
 
     const student = await prisma.student.findUnique({
       where: { id: studentId },
@@ -117,7 +117,7 @@ export const getleaderboardDivisionWise = catchAsync(
       return next(new AppError("Invalid query parameters", 400));
     }
     const { semester_id, subject_id, exam_type, exam_name } = parseResult.data;
-    const studentId = req.user!.sub;
+    const studentId = req.user!.id;
 
     const student = await prisma.student.findUnique({
       where: { id: studentId },
@@ -183,7 +183,7 @@ export const getOverallLeaderboard = catchAsync(
       return next(new AppError("Invalid query parameters", 400));
     }
     const { semester_id, subject_id, exam_type, exam_name } = parseResult.data;
-    const studentId = req.user!.sub;
+    const studentId = req.user!.id;
 
     const student = await prisma.student.findUnique({
       where: { id: studentId },
@@ -251,7 +251,7 @@ export const getOverallLeaderboard = catchAsync(
 
 export const getCurrentSemesterDetails = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const studentId = req.user!.sub;
+    const studentId = req.user!.id;
 
     const student = await prisma.student.findUnique({
       where: { id: studentId },
@@ -333,7 +333,7 @@ export const getCurrentSemesterDetails = catchAsync(
 
 export const getPastSemestersDetails = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const studentId = req.user!.sub;
+    const studentId = req.user!.id;
 
     const student = await prisma.student.findUnique({
       where: { id: studentId },

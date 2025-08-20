@@ -3,7 +3,7 @@ import { prisma } from "../db/prisma.js";
 import { encrypt, decrypt } from "../utils/encryption.js";
 import type { AuthUser, UserRole } from "./types.js";
 import { RoleType, TeacherRole } from "./types.js";
-import { AppError } from "../utils/AppError.js"; 
+import { AppError } from "../utils/AppError.js";
 import { Prisma } from "@prisma/client";
 
 interface GoogleTokenResponse {
@@ -16,7 +16,7 @@ interface GoogleTokenResponse {
 }
 
 interface GoogleIdTokenPayload {
-  sub: string;
+  id: string;
   email: string;
   email_verified: boolean;
   name: string;
@@ -108,7 +108,7 @@ export async function authenticateUserWithGoogle(
   role: string
 ): Promise<AuthUser> {
 
-    role=role.trim().toUpperCase();
+  role = role.trim().toUpperCase();
   if (!validateRole(role)) {
     throw new AppError("Invalid role specified", 400);
   }
@@ -117,7 +117,7 @@ export async function authenticateUserWithGoogle(
   const profile = await verifyIdToken(tokens.id_token);
 
   const tokenUpdateData = {
-    googleId: profile.sub,
+    googleId: profile.id,
     googleRefreshToken: tokens.refresh_token
       ? encrypt(tokens.refresh_token)
       : null,
@@ -135,7 +135,7 @@ export async function authenticateUserWithGoogle(
       if (!userRecord) {
         throw new AppError("Admin not found or not authorized for this role", 404);
       }
-      
+
       await prisma.admin.update({
         where: { id: userRecord.id },
         data: tokenUpdateData,
@@ -147,7 +147,7 @@ export async function authenticateUserWithGoogle(
         email: userRecord.email,
         role: userRecord.role.role as UserRole,
         designation: userRecord.designation ?? "",
-        phone:userRecord.phone
+        phone: userRecord.phone
       };
     } else if (
       role === TeacherRole.TEACHER ||
@@ -172,7 +172,7 @@ export async function authenticateUserWithGoogle(
         email: userRecord.email,
         role: userRecord.role as TeacherRole,
         designation: userRecord.designation || "",
-        phone:userRecord.phone
+        phone: userRecord.phone
       };
     } else if (role === "STUDENT") {
       const userRecord = await prisma.student.findUnique({
@@ -193,7 +193,7 @@ export async function authenticateUserWithGoogle(
         name: userRecord.name,
         email: userRecord.email,
         role: "STUDENT",
-        phone:userRecord.phone
+        phone: userRecord.phone
       };
     } else {
       throw new AppError("Invalid role specified", 400);
@@ -201,12 +201,11 @@ export async function authenticateUserWithGoogle(
   } catch (error: any) {
     if (error instanceof AppError) throw error;
     console.error("Database error during authentication:", error);
-    
-    // Handle Prisma errors specifically if needed
+
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       throw new AppError("Database operation failed", 500);
     }
-    
+
     throw new AppError("Authentication failed", 500);
   }
 }
@@ -239,7 +238,7 @@ export async function refreshGoogleToken(
     }
 
     if (!refreshToken) {
-      throw new AppError("No refresh token available", 400);
+      throw new AppError("No refresh token available for this user", 400);
     }
 
     const decryptedRefreshToken = decrypt(refreshToken);
@@ -258,14 +257,30 @@ export async function refreshGoogleToken(
 
     return data.access_token;
   } catch (error: any) {
+    if (axios.isAxiosError(error) && error.response?.data?.error === 'invalid_grant') {
+      console.error("Google refresh token is invalid or revoked for user:", userId);
+
+      try {
+        const dataToUpdate = { googleRefreshToken: null };
+        if (userType === 'admin') {
+          await prisma.admin.update({ where: { id: userId }, data: dataToUpdate });
+        } else if (userType === 'teacher') {
+          await prisma.teacher.update({ where: { id: userId }, data: dataToUpdate });
+        } else if (userType === 'student') {
+          await prisma.student.update({ where: { id: userId }, data: dataToUpdate });
+        }
+      } catch (dbError) {
+        console.error("Failed to nullify expired token for user:", userId, dbError);
+      }
+      
+      throw new AppError("Google authorization has expired. Please log in again.", 401);
+    }
+
     console.error("Token refresh error:", error);
-    
     if (error instanceof AppError) throw error;
-    
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       throw new AppError("Database error during token refresh", 500);
     }
-    
     throw new AppError("Failed to refresh access token", 500);
   }
 }

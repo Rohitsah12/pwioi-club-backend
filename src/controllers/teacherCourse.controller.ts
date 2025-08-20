@@ -13,12 +13,12 @@ interface ActiveSubjectDetails {
 }
 
 export const getTeacherActiveSubjects = catchAsync(async (req: Request, res: Response) => {
-  const { sub: teacherId } = req.user!;
+  const { id: teacherId } = req.user!;
 
   if (!teacherId) {
     throw new AppError("Teacher ID not found", 400);
   }
-    const now = new Date();
+  const now = new Date();
 
   const subjects = await prisma.subject.findMany({
     where: {
@@ -63,8 +63,8 @@ export const getTeacherActiveSubjects = catchAsync(async (req: Request, res: Res
     }
   });
 
-  
-  
+
+
   const subjectsDetails: ActiveSubjectDetails[] = subjects.map(subject => ({
     subjectName: subject.name,
     batchName: subject.semester!.division!.batch.name,
@@ -94,15 +94,15 @@ export const getExamsAndPassStatsByType = catchAsync(async (req: Request, res: R
 
   const subject = await prisma.subject.findUnique({
     where: { id: subjectId },
-    select: { 
-        id: true, 
-        name: true, 
-        code: true,
-        semester: {
-            select: {
-                division_id: true
-            }
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      semester: {
+        select: {
+          division_id: true
         }
+      }
     }
   });
 
@@ -142,12 +142,12 @@ export const getExamsAndPassStatsByType = catchAsync(async (req: Request, res: R
     const presentStudentsMarks = exam.marks.filter(m => m.marks_obtained !== null).map(m => m.marks_obtained as number);
     const totalPresent = presentStudentsMarks.length;
     const totalPassed = presentStudentsMarks.filter(mark => mark >= exam.passing_marks).length;
-    
+
     const totalMarksSum = presentStudentsMarks.reduce((sum, mark) => sum + mark, 0);
     const averageMarks = totalPresent > 0 ? parseFloat((totalMarksSum / totalPresent).toFixed(2)) : 0;
 
-    const attendancePercentage = totalStudentsInDivision > 0 
-      ? Math.round((totalPresent / totalStudentsInDivision) * 100) 
+    const attendancePercentage = totalStudentsInDivision > 0
+      ? Math.round((totalPresent / totalStudentsInDivision) * 100)
       : 0;
 
     return {
@@ -164,7 +164,7 @@ export const getExamsAndPassStatsByType = catchAsync(async (req: Request, res: R
     };
   });
 
-  const overallAverageMarks = examStats.length > 0 
+  const overallAverageMarks = examStats.length > 0
     ? parseFloat((examStats.reduce((sum, exam) => sum + exam.averageMarks, 0) / examStats.length).toFixed(2))
     : 0;
 
@@ -242,7 +242,7 @@ export const getExamStudentResults = catchAsync(async (req: Request, res: Respon
     const marks = marksMap.get(student.id);
     const isPresent = marks !== undefined;
     const marksObtained = isPresent ? marks : null;
-    
+
     return {
       enrollmentId: student.enrollment_id,
       name: student.name,
@@ -284,13 +284,13 @@ export const getExamStudentResults = catchAsync(async (req: Request, res: Respon
   res.status(200).json({
     success: true,
     exam: {
-        id: exam.id,
-        name: exam.name,
-        type: exam.exam_type,
-        exam_date: exam.exam_date,
-        full_marks: exam.full_marks,
-        passing_marks: exam.passing_marks,
-        subject: exam.subject
+      id: exam.id,
+      name: exam.name,
+      type: exam.exam_type,
+      exam_date: exam.exam_date,
+      full_marks: exam.full_marks,
+      passing_marks: exam.passing_marks,
+      subject: exam.subject
     },
     summary: {
       totalStudents: totalStudents,

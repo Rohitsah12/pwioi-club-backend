@@ -2,9 +2,10 @@ import type { Request, Response, NextFunction } from "express";
 import { catchAsync } from "../utils/catchAsync.js";
 import { AppError } from "../utils/AppError.js";
 import { authenticateUserWithGoogle } from "../auth/googleOAuth.js";
-import { signJwt } from "../auth/jwt.js";
-
-
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../auth/jwt.js"; 
+import { findUserById } from '../service/userService.js';
+import { success } from "zod";
+import { tr } from "zod/locales";
 
 const googleLogin = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { code, role } = req.body;
@@ -32,17 +33,22 @@ const googleLogin = catchAsync(async (req: Request, res: Response, next: NextFun
     throw new AppError(error.message, statusCode);
   }
 
-  const token = signJwt(user);
+  const accessToken = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
 
-  res.cookie('token', token, {
+  res.cookie('token', accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 2 * 60 * 60 * 1000,
+    maxAge: 60 * 60 * 1000, 
   });
 
   res.status(200).json({
     success: true,
+    tokens: {
+      accessToken,
+      refreshToken,
+    },
     user: {
       id: user.id,
       name: user.name,
@@ -51,19 +57,19 @@ const googleLogin = catchAsync(async (req: Request, res: Response, next: NextFun
       designation: user.designation,
     },
   });
-})
+});
 
 const logout = catchAsync(async (req: Request, res: Response) => {
-res.clearCookie("token", {
+  res.clearCookie("token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict"
   });
 
-  return res.status(200).json({ message: "Logged out successfully" });
-    
-  } 
-);
+  return res.status(200).json({ 
+    success:true,
+    message: "Logged out successfully" });
+});
 
 const getMe = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
@@ -78,4 +84,36 @@ const getMe = catchAsync(async (req: Request, res: Response, next: NextFunction)
   });
 });
 
-export {googleLogin,logout,getMe};
+
+const refreshToken = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+    const { token } = req.body;
+
+    if (!token) {
+        throw new AppError('Refresh token is required', 400);
+    }
+
+    const decoded = verifyRefreshToken(token);
+
+    const user = await findUserById(decoded.id);
+    if (!user) {
+        throw new AppError('User belonging to this token no longer exists', 404);
+    }
+
+    const newAccessToken = signAccessToken(user);
+    
+
+    res.cookie('token', newAccessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 1000, // 1 hour
+    });
+
+    res.status(200).json({
+        success: true,
+        accessToken: newAccessToken,
+    });
+});
+
+
+export { googleLogin, logout, getMe, refreshToken };

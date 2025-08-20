@@ -12,7 +12,7 @@ interface ExamMarkRow {
 
 export const uploadExamMarks = async (req: Request, res: Response) => {
   const { examId } = req.params;
-  const teacherId = req.user!.sub;
+  const teacherId = req.user!.id;
   const overwriteExisting = req.body.overwriteExisting === 'true';
 
   if (!req.file) {
@@ -53,7 +53,7 @@ export const uploadExamMarks = async (req: Request, res: Response) => {
     if (!sheetName) throw new AppError("Excel file contains no sheets", 400);
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) throw new AppError(`Sheet "${sheetName}" not found in the file.`, 400);
-    
+
     const rows = xlsx.utils.sheet_to_json(sheet) as ExamMarkRow[];
 
     const summary = {
@@ -121,7 +121,7 @@ export const uploadExamMarks = async (req: Request, res: Response) => {
       transactionResults.forEach((mark) => {
         const student = eligibleStudents.find((s) => s.id === mark.student_id);
         if (student) {
-            results.push({
+          results.push({
             row: 'N/A',
             enrollmentId: student.enrollment_id,
             status: 'success',

@@ -165,7 +165,7 @@ export const getAllCentersByAdmin = catchAsync(async (
   if(!adminId){
     throw new AppError("Admin Id Required",400)
   }
-  const { role, sub } = req.user!;
+  const { role, id } = req.user!;
 
   let centers, stats;
 

@@ -16,7 +16,7 @@ export const createDivision = catchAsync(async (
     res: Response
 ) => {
     const { batchId, code, startDate, endDate } = req.body;
-    const { role, sub } = req.user!;
+    const { role, id } = req.user!;
 
     if (!batchId || !code || !endDate) {
         throw new AppError("batchId, code, and endDate are required", 400);
@@ -81,7 +81,7 @@ export const updateDivision = catchAsync(async (
 ) => {
     const { divisionId } = req.params as { divisionId: string };
     const updates = req.body as UpdateDivisionRequest;
-    const { role, sub } = req.user!;
+    const { role, id } = req.user!;
 
     if (!divisionId) {
         throw new AppError("divisionId is required", 400);
@@ -168,7 +168,7 @@ export const updateDivision = catchAsync(async (
 
 export const deleteDivision = catchAsync(async (req: Request, res: Response) => {
     const { divisionId } = req.params;
-    const { role, sub } = req.user!;
+    const { role, id } = req.user!;
 
     if (!divisionId) {
         throw new AppError("divisionId is required", 400);
@@ -205,7 +205,7 @@ export const getDivisionBatch = catchAsync(async (
     res: Response
 ) => {
     const { batchId } = req.params;
-    const { role, sub } = req.user!;
+    const { role, id } = req.user!;
 
     if (!batchId) {
         throw new AppError("batchId is required", 400);
@@ -221,7 +221,7 @@ export const getDivisionBatch = catchAsync(async (
     }
 
     const centerId = batch.center_id;
-   
+
     const divisions = await prisma.division.findMany({
         where: { batch_id: batchId },
         orderBy: { code: "asc" }
@@ -239,7 +239,7 @@ export const getDivisionBySchool = catchAsync(async (
     res: Response
 ) => {
     const { schoolId } = req.params;
-    const { role, sub } = req.user!;
+    const { role, id } = req.user!;
 
     if (!schoolId) {
         throw new AppError("schoolId is required", 400);
@@ -272,7 +272,7 @@ export const getDivisionByCenter = catchAsync(async (
     res: Response
 ) => {
     const { centerId } = req.params;
-    const { role, sub } = req.user!;
+    const { role, id } = req.user!;
 
     if (!centerId) {
         throw new AppError("centerId is required", 400);
@@ -291,45 +291,45 @@ export const getDivisionByCenter = catchAsync(async (
 });
 
 export const getDivisionDetails = catchAsync(async (
-  req: Request,
-  res: Response
+    req: Request,
+    res: Response
 ) => {
-  const { divisionId } = req.params;
-  const { role, sub } = req.user!;
+    const { divisionId } = req.params;
+    const { role, id } = req.user!;
 
-  if (!divisionId) {
-    throw new AppError("divisionId is required", 400);
-  }
-
-  const divisionExists = await prisma.division.findUnique({
-    where: { id: divisionId },
-    select: { id: true, center_id: true }
-  });
-
-  if (!divisionExists) {
-    throw new AppError("Division not found", 404);
-  }
-
-
-  // Fetch division details without relations
-  const division = await prisma.division.findUnique({
-    where: { id: divisionId },
-  });
-
-  if (!division) {
-    throw new AppError("Division not found", 404);
-  }
-
-  const studentCount = await prisma.student.count({
-    where: { division_id: divisionId }
-  });
-
-  res.status(200).json({
-    success: true,
-    message: "Division details retrieved successfully",
-    data: {
-      ...division,
-      student_count: studentCount
+    if (!divisionId) {
+        throw new AppError("divisionId is required", 400);
     }
-  });
+
+    const divisionExists = await prisma.division.findUnique({
+        where: { id: divisionId },
+        select: { id: true, center_id: true }
+    });
+
+    if (!divisionExists) {
+        throw new AppError("Division not found", 404);
+    }
+
+
+    // Fetch division details without relations
+    const division = await prisma.division.findUnique({
+        where: { id: divisionId },
+    });
+
+    if (!division) {
+        throw new AppError("Division not found", 404);
+    }
+
+    const studentCount = await prisma.student.count({
+        where: { division_id: divisionId }
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Division details retrieved successfully",
+        data: {
+            ...division,
+            student_count: studentCount
+        }
+    });
 });

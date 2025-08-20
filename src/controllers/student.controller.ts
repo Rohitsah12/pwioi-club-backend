@@ -124,7 +124,7 @@ async function authorizeDivisionAccess(
   if (role === AuthorRole.SUPER_ADMIN || role === AuthorRole.ADMIN) {
     return;
   }
-  
+
   throw new AppError("Your role is not permitted to perform this action", 403);
 }
 
@@ -196,23 +196,23 @@ async function checkDuplicates(students: StudentInput[]): Promise<{
 }> {
   const duplicateIndexes = new Set<number>();
   const existingConflicts: ExistingConflict[] = [];
-  
+
   // 1. Check for duplicates within the input array
   const seenEmails = new Set<string>();
   const seenPhones = new Set<string>();
   const seenEnrollmentIds = new Set<string>();
 
   students.forEach((student, index) => {
-      const email = student.email.toLowerCase();
-      const phone = student.phone;
-      const enrollmentId = student.enrollment_id;
+    const email = student.email.toLowerCase();
+    const phone = student.phone;
+    const enrollmentId = student.enrollment_id;
 
-      if (seenEmails.has(email) || seenPhones.has(phone) || seenEnrollmentIds.has(enrollmentId)) {
-          duplicateIndexes.add(index);
-      }
-      seenEmails.add(email);
-      seenPhones.add(phone);
-      seenEnrollmentIds.add(enrollmentId);
+    if (seenEmails.has(email) || seenPhones.has(phone) || seenEnrollmentIds.has(enrollmentId)) {
+      duplicateIndexes.add(index);
+    }
+    seenEmails.add(email);
+    seenPhones.add(phone);
+    seenEnrollmentIds.add(enrollmentId);
   });
 
   // 2. Check against existing records in the database
@@ -238,7 +238,7 @@ async function checkDuplicates(students: StudentInput[]): Promise<{
   students.forEach((student, index) => {
     const email = student.email.toLowerCase();
     const conflictId = existingEmailMap.get(email) || existingPhoneMap.get(student.phone) || existingEnrollmentMap.get(student.enrollment_id);
-    
+
     if (conflictId) {
       const conflictType = existingEmailMap.has(email) ? 'email' : existingPhoneMap.has(student.phone) ? 'phone' : 'enrollment_id';
       existingConflicts.push({
@@ -290,7 +290,7 @@ async function bulkInsertStudents(
   try {
     for (let i = 0; i < studentsToCreate.length; i += PRISMA_BATCH_SIZE) {
       const batch = studentsToCreate.slice(i, i + PRISMA_BATCH_SIZE);
-      
+
       const batchData = batch.map((student) => ({
         name: student.name.trim(),
         email: student.email.toLowerCase().trim(),
@@ -337,7 +337,7 @@ async function bulkInsertStudents(
  */
 export const bulkCreateStudents = catchAsync(async (req: Request, res: Response) => {
   const { divisionId, semesterId, students } = req.body;
-  const { role, sub } = req.user!;
+  const { role, id } = req.user!;
 
   if (!divisionId || !semesterId || !Array.isArray(students)) {
     throw new AppError("divisionId, semesterId, and a students array are required", 400);
@@ -348,7 +348,7 @@ export const bulkCreateStudents = catchAsync(async (req: Request, res: Response)
 
   const divisionDetails = await getDivisionDetails(divisionId);
   await validateSemesterDivision(semesterId, divisionId);
-  await authorizeDivisionAccess(divisionDetails.center_id, role, sub);
+  await authorizeDivisionAccess(divisionDetails.center_id, role, id);
 
   const validationErrors: ValidationError[] = [];
   const validStudents: StudentInput[] = [];
@@ -416,7 +416,7 @@ export const bulkCreateStudents = catchAsync(async (req: Request, res: Response)
  */
 export const createStudentsFromExcel = catchAsync(async (req: Request, res: Response) => {
   const { divisionId, semesterId } = req.body;
-  const { role, sub } = req.user!;
+  const { role, id } = req.user!;
   const file = req.file;
 
   if (!divisionId || !semesterId) throw new AppError("divisionId and semesterId are required", 400);
@@ -425,7 +425,7 @@ export const createStudentsFromExcel = catchAsync(async (req: Request, res: Resp
 
   const divisionDetails = await getDivisionDetails(divisionId);
   await validateSemesterDivision(semesterId, divisionId);
-  await authorizeDivisionAccess(divisionDetails.center_id, role, sub);
+  await authorizeDivisionAccess(divisionDetails.center_id, role, id);
 
   const workbook = XLSX.read(file.buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
@@ -438,7 +438,7 @@ export const createStudentsFromExcel = catchAsync(async (req: Request, res: Resp
   if (!worksheet) {
     throw new AppError(`Sheet "${sheetName}" could not be found in the file.`, 400);
   }
-  
+
   const rawData = XLSX.utils.sheet_to_json(worksheet);
 
   if (rawData.length === 0) throw new AppError("Excel file is empty", 400);
@@ -516,42 +516,42 @@ export const createStudentsFromExcel = catchAsync(async (req: Request, res: Resp
  * @access  Private (Super Admin, Admin)
  */
 export const softDeleteStudent = catchAsync(async (req: Request, res: Response) => {
-    const { studentId } = req.params;
-    if(!studentId){
-        throw new AppError("Student Id required",400)
+  const { studentId } = req.params;
+  if (!studentId) {
+    throw new AppError("Student Id required", 400)
+  }
+  const { role, id } = req.user!;
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { center_id: true, is_active: true }
+  });
+
+  if (!student) {
+    throw new AppError("Student not found", 404);
+  }
+
+  // Authorize the action - both ADMIN and SUPER_ADMIN have access to all centers
+  await authorizeDivisionAccess(student.center_id, role, id);
+
+  if (!student.is_active) {
+    throw new AppError("Student is already deactivated", 400);
+  }
+
+  // Perform the soft delete
+  const updatedStudent = await prisma.student.update({
+    where: { id: studentId },
+    data: {
+      is_active: false,
+      deactivatedAt: new Date() // Sets the deactivation timestamp
     }
-    const { role, sub } = req.user!;
+  });
 
-    const student = await prisma.student.findUnique({
-        where: { id: studentId },
-        select: { center_id: true, is_active: true }
-    });
-
-    if (!student) {
-        throw new AppError("Student not found", 404);
-    }
-
-    // Authorize the action - both ADMIN and SUPER_ADMIN have access to all centers
-    await authorizeDivisionAccess(student.center_id, role, sub);
-
-    if (!student.is_active) {
-        throw new AppError("Student is already deactivated", 400);
-    }
-
-    // Perform the soft delete
-    const updatedStudent = await prisma.student.update({
-        where: { id: studentId },
-        data: {
-            is_active: false,
-            deactivatedAt: new Date() // Sets the deactivation timestamp
-        }
-    });
-
-    res.status(200).json({
-        success: true,
-        message: "Student has been successfully deactivated.",
-        student: sanitizeStudentData(updatedStudent)
-    });
+  res.status(200).json({
+    success: true,
+    message: "Student has been successfully deactivated.",
+    student: sanitizeStudentData(updatedStudent)
+  });
 });
 
 /**
@@ -560,25 +560,25 @@ export const softDeleteStudent = catchAsync(async (req: Request, res: Response) 
  * @access  Private (Super Admin only)
  */
 export const permanentlyDeleteStudent = catchAsync(async (req: Request, res: Response) => {
-    const { studentId } = req.params;
-    if(!studentId){
-        throw new AppError("Student Id required",400)
-    }
-    const { role } = req.user!;
+  const { studentId } = req.params;
+  if (!studentId) {
+    throw new AppError("Student Id required", 400)
+  }
+  const { role } = req.user!;
 
-    if (role !== AuthorRole.SUPER_ADMIN) {
-        throw new AppError("You do not have permission to permanently delete a student.", 403);
-    }
+  if (role !== AuthorRole.SUPER_ADMIN) {
+    throw new AppError("You do not have permission to permanently delete a student.", 403);
+  }
 
-    const student = await prisma.student.findUnique({ where: { id: studentId } });
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
 
-    if (!student) {
-        throw new AppError("Student not found", 404);
-    }
+  if (!student) {
+    throw new AppError("Student not found", 404);
+  }
 
-    await prisma.student.delete({ where: { id: studentId } });
+  await prisma.student.delete({ where: { id: studentId } });
 
-    res.status(204).send(); // 204 No Content is standard for successful deletions
+  res.status(204).send(); // 204 No Content is standard for successful deletions
 });
 
 /**
@@ -586,36 +586,36 @@ export const permanentlyDeleteStudent = catchAsync(async (req: Request, res: Res
  * @note    This function is NOT an API endpoint. It should be run by a scheduler (e.g., node-cron).
  */
 export async function cleanupInactiveStudents() {
-    console.log('Running scheduled job: cleanupInactiveStudents...');
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  console.log('Running scheduled job: cleanupInactiveStudents...');
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Find students who were deactivated over 30 days ago
-    const studentsToDelete = await prisma.student.findMany({
-        where: {
-            is_active: false,
-            deactivatedAt: {
-                lt: thirtyDaysAgo // 'lt' means "less than"
-            }
-        },
-        select: { id: true }
+  // Find students who were deactivated over 30 days ago
+  const studentsToDelete = await prisma.student.findMany({
+    where: {
+      is_active: false,
+      deactivatedAt: {
+        lt: thirtyDaysAgo // 'lt' means "less than"
+      }
+    },
+    select: { id: true }
+  });
+
+  if (studentsToDelete.length === 0) {
+    console.log("No students found for cleanup.");
+    return;
+  }
+
+  const idsToDelete = studentsToDelete.map(s => s.id);
+
+  try {
+    const deleteResult = await prisma.student.deleteMany({
+      where: {
+        id: { in: idsToDelete }
+      }
     });
-
-    if (studentsToDelete.length === 0) {
-        console.log("No students found for cleanup.");
-        return;
-    }
-
-    const idsToDelete = studentsToDelete.map(s => s.id);
-
-    try {
-        const deleteResult = await prisma.student.deleteMany({
-            where: {
-                id: { in: idsToDelete }
-            }
-        });
-        console.log(`Successfully deleted ${deleteResult.count} inactive students.`);
-    } catch (error) {
-        console.error("Error during scheduled student cleanup:", error);
-    }
+    console.log(`Successfully deleted ${deleteResult.count} inactive students.`);
+  } catch (error) {
+    console.error("Error during scheduled student cleanup:", error);
+  }
 }
