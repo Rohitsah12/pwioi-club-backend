@@ -1,5 +1,5 @@
 // services/userService.ts
-import type { UserRole } from '../auth/types.js';
+import type { AuthUser, UserRole } from '../auth/types.js';
 import { prisma } from '../db/prisma.js';
 import type { AuthorRole } from '../types/postApi.js';
 import { AppError } from '../utils/AppError.js';
@@ -20,3 +20,53 @@ export const findUserByRole = async (id: string, role: UserRole) => {
   if (!user) throw new AppError('User not found', 404);
   return user;
 };
+
+
+export async function findUserById(id: string): Promise<AuthUser | null> {
+  const admin = await prisma.admin.findUnique({
+    where: { id },
+    include: { role: true }, 
+  });
+
+  if (admin) {
+    return {
+      id: admin.id,
+      name: admin.name,
+      email: admin.email,
+      role: admin.role.role as UserRole, 
+      designation: admin.designation ?? "",
+      phone: admin.phone,
+    };
+  }
+
+  const teacher = await prisma.teacher.findUnique({
+    where: { id },
+  });
+
+  if (teacher) {
+    return {
+      id: teacher.id,
+      name: teacher.name,
+      email: teacher.email,
+      role: teacher.role as UserRole,
+      designation: teacher.designation || "",
+      phone: teacher.phone,
+    };
+  }
+
+  const student = await prisma.student.findUnique({
+    where: { id },
+  });
+
+  if (student) {
+    return {
+      id: student.id,
+      name: student.name,
+      email: student.email,
+      role: "STUDENT",
+      phone: student.phone,
+    };
+  }
+
+  return null;
+}

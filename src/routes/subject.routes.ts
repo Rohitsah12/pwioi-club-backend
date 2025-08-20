@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js";
-import { createSubject, deleteSubject, getAllSubjects, getSubjectById, getSubjectsBySemester, getSubjectsByTeacher, getSubjectStatistics, updateSubject } from "../controllers/subject.controller.js";
+import { createSubject, deleteSubject, getAllSubjects, getStudentsForSubject, getSubjectById, getSubjectsBySemester, getSubjectsByTeacher, getSubjectStatistics, updateSubject } from "../controllers/subject.controller.js";
 
 const subjectRoutes=Router();
 
@@ -14,5 +14,5 @@ subjectRoutes.delete("/:subjectId", authenticateJwt, requireRoles("ADMIN", "SUPE
 subjectRoutes.get("/semesters/:semesterId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getSubjectsBySemester);
 subjectRoutes.get("/teachers/:teacherId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getSubjectsByTeacher);
 
-
+subjectRoutes.get('/:subjectId/students',authenticateJwt, requireRoles("TEACHER",), getStudentsForSubject);
 export default subjectRoutes;

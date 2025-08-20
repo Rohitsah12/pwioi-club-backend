@@ -4,7 +4,6 @@ import { catchAsync } from "../utils/catchAsync.js";
 import { AppError } from "../utils/AppError.js";
 import { z } from "zod";
 
-// Validation Schemas
 const createSubjectSchema = z.object({
   name: z.string().min(1, "Subject name is required").max(100, "Subject name cannot exceed 100 characters"),
   semester_id: z.string().min(1, "Semester ID is required"),
@@ -28,7 +27,7 @@ const updateSubjectSchema = z.object({
  */
 export const createSubject = catchAsync(async (req: Request, res: Response) => {
   const validation = createSubjectSchema.safeParse(req.body);
-  
+
   if (!validation.success) {
     return res.status(400).json({
       success: false,
@@ -97,6 +96,57 @@ export const createSubject = catchAsync(async (req: Request, res: Response) => {
     data: subject,
   });
 });
+
+
+export const getStudentsForSubject = async (req: Request, res: Response) => {
+  const { subjectId } = req.params;
+  const teacherId = req.user!.id;
+
+  if (!subjectId) {
+    throw new AppError("Subject Id Required", 400)
+  }
+
+  try {
+    const subject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+      include: {
+        semester: {
+          include: {
+            division: true,
+          },
+        },
+      },
+    });
+
+    if (!subject) {
+      return res.status(404).json({ success: false, message: 'Subject not found.' });
+    }
+    if (subject.teacher_id !== teacherId) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to access students for this subject.' });
+    }
+
+    // 3. Fetch all students from the subject's division
+    const students = await prisma.student.findMany({
+      where: {
+        division_id: subject.semester.division_id,
+        is_active: true,
+      },
+      select: {
+        name: true,
+        enrollment_id: true,
+      },
+      orderBy: {
+        enrollment_id: 'asc',
+      },
+    });
+
+    return res.status(200).json({ success: true, data: students });
+
+  } catch (error) {
+    console.error('Error fetching students for subject:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+};
 
 /**
  * @desc    Get all subjects with filtering
@@ -515,7 +565,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
   ] = await Promise.all([
     // Total subjects count
     prisma.subject.count(),
-    
+
     // Subjects grouped by credits
     prisma.subject.groupBy({
       by: ['credits'],
@@ -524,7 +574,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
       },
       orderBy: { credits: 'asc' }
     }),
-    
+
     // Subjects per semester
     prisma.subject.groupBy({
       by: ['semester_id'],
@@ -533,7 +583,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
       },
       orderBy: { _count: { id: 'desc' } }
     }),
-    
+
     // Subjects with most classes
     prisma.subject.findMany({
       select: {
@@ -548,7 +598,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
         classes: { _count: 'desc' }
       }
     }),
-    
+
     // Subjects with most exams
     prisma.subject.findMany({
       select: {

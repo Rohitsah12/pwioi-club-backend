@@ -73,7 +73,7 @@ export const getAllSchools = catchAsync(async (
   if (!centerId) {
     throw new AppError("centerId required", 400);
   }
-  const { role, sub } = req.user!;
+  const { role, id } = req.user!;
 
   // ADMIN and SUPER_ADMIN can access all centers' schools
   if (role === AuthorRole.SUPER_ADMIN || role === AuthorRole.ADMIN) {
@@ -88,7 +88,7 @@ export const getAllSchools = catchAsync(async (
   // Teacher can only access their own center
   if (role === AuthorRole.TEACHER) {
     const teacher = await prisma.teacher.findUnique({
-      where: { id: sub },
+      where: { id: id },
       select: { center_id: true }
     });
     if (!teacher) throw new AppError("Teacher not found", 404);
@@ -140,8 +140,8 @@ export const getSchoolStats = catchAsync(async (
   res: Response
 ) => {
   const { schoolId } = req.params;
-  if(!schoolId){
-    throw new AppError("School Id required",400)
+  if (!schoolId) {
+    throw new AppError("School Id required", 400)
   }
   const { role } = req.user!;
 
@@ -173,7 +173,7 @@ export const getSchoolStats = catchAsync(async (
     prisma.batch.count({ where: { school_id: schoolId } }),
     prisma.division.count({ where: { school_id: schoolId } }),
     prisma.student.count({ where: { school_id: schoolId } }),
-    prisma.teacherSchool.count({ where: { school_id: schoolId } }) 
+    prisma.teacherSchool.count({ where: { school_id: schoolId } })
   ]);
 
   res.status(200).json({
