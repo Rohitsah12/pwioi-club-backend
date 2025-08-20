@@ -53,6 +53,22 @@ export const getPosts = catchAsync(async (req: Request, res: Response) => {
     where,
     include: {
       media: true,
+      comments: {
+        take: 2,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          content: true,
+          user_id: true,
+          user_role: true,
+          createdAt: true,
+        },
+      },
+      _count: {
+        select: {
+          comments: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
@@ -67,8 +83,13 @@ export const getPosts = catchAsync(async (req: Request, res: Response) => {
 
   const postsWithUserInfo = await Promise.all(
     posts.map(async (post) => {
-      let userInfo: { designation?: string | null; schoolName?: string } = {};
+      let userInfo: { 
+        name?: string; 
+        designation?: string | null; 
+        schoolName?: string;
+      } = {};
 
+      // Get author information
       switch (post.author_type) {
         case "ADMIN":
         case "SUPER_ADMIN":
@@ -76,39 +97,95 @@ export const getPosts = catchAsync(async (req: Request, res: Response) => {
         case "BATCHOPS": {
           const admin = await prisma.admin.findUnique({
             where: { id: post.author_id },
-            select: { designation: true },
+            select: { name: true, designation: true },
           });
-          if (admin) userInfo.designation = admin.designation;
+          if (admin) {
+            userInfo.name = admin.name;
+            userInfo.designation = admin.designation;
+          }
           break;
         }
         case "TEACHER":
         case "ASSISTANT_TEACHER": {
           const teacher = await prisma.teacher.findUnique({
             where: { id: post.author_id },
-            select: { designation: true },
+            select: { name: true, designation: true },
           });
-          if (teacher) userInfo.designation = teacher.designation;
+          if (teacher) {
+            userInfo.name = teacher.name;
+            userInfo.designation = teacher.designation;
+          }
           break;
         }
         case "STUDENT": {
           const student = await prisma.student.findUnique({
             where: { id: post.author_id },
-            include: {
+            select: {
+              name: true,
               school: {
                 select: { name: true },
               },
             },
           });
-          if (student?.school) userInfo.schoolName = student.school.name;
+          if (student) {
+            userInfo.name = student.name;
+            if (student.school) userInfo.schoolName = student.school.name;
+          }
           break;
         }
         default:
           break;
       }
 
+      const commentsWithUserInfo = await Promise.all(
+        post.comments.map(async (comment) => {
+          let commentUserInfo: { name?: string } = {};
+
+          switch (comment.user_role) {
+            case "ADMIN":
+            case "SUPER_ADMIN":
+            case "OPS":
+            case "BATCHOPS": {
+              const admin = await prisma.admin.findUnique({
+                where: { id: comment.user_id },
+                select: { name: true },
+              });
+              if (admin) commentUserInfo.name = admin.name;
+              break;
+            }
+            case "TEACHER":
+            case "ASSISTANT_TEACHER": {
+              const teacher = await prisma.teacher.findUnique({
+                where: { id: comment.user_id },
+                select: { name: true },
+              });
+              if (teacher) commentUserInfo.name = teacher.name;
+              break;
+            }
+            case "STUDENT": {
+              const student = await prisma.student.findUnique({
+                where: { id: comment.user_id },
+                select: { name: true },
+              });
+              if (student) commentUserInfo.name = student.name;
+              break;
+            }
+            default:
+              break;
+          }
+
+          return {
+            ...comment,
+            userInfo: commentUserInfo,
+          };
+        })
+      );
+
       return {
         ...post,
         userInfo,
+        comments: commentsWithUserInfo,
+        totalCommentsCount: post._count.comments,
       };
     })
   );

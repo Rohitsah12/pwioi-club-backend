@@ -509,7 +509,6 @@ export const getAssistantTeachers = catchAsync(async (req: Request, res: Respons
   const assistantTeachers = await prisma.teacher.findMany({
     where: {
       center_id: teacher.center_id,
-      role: "ASSISTANT_TEACHER"
     },
     select: {
       id: true,
@@ -629,6 +628,8 @@ export const getCenterBatches = catchAsync(async (req: Request, res: Response) =
     }
   });
 });
+
+
 export const updateTeacherExperience = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
@@ -739,17 +740,27 @@ const researchPaperCreateSchema = z.object({
 
 const researchPaperUpdateSchema = researchPaperCreateSchema.partial();
 
+// export const getTeacherBasicDetails=catchAsync(async (req:Request,res:Response)=>{
+//   const teahcerId=req.user!.id;
 
+
+//   const teacher=await prisma.teacher.findUnique({
+//     where:
+//   })
+
+
+// })
 export const addBasicDetailsOfTeacher = catchAsync(async (req: Request, res: Response) => {
   const user = req.user!;
-  const { linkedin_url, github_url, personal_email } = req.body;
+  const { linkedin_url, github_url, personal_email, about } = req.body;
 
   if (
     linkedin_url === undefined &&
     github_url === undefined &&
-    personal_email === undefined
+    personal_email === undefined && 
+    about === undefined
   ) {
-    throw new AppError("Must provide at least one field: linkedin_url, github_url, or personal_email", 400);
+    throw new AppError("Must provide at least one field: linkedin_url, github_url, about or personal_email", 400);
   }
 
   const updateData: Record<string, string | null> = {};
@@ -758,14 +769,23 @@ export const addBasicDetailsOfTeacher = catchAsync(async (req: Request, res: Res
     if (linkedin_url !== "" && typeof linkedin_url !== "string") {
       throw new AppError("linkedin_url must be a string", 400);
     }
-    updateData.linkedin_url = linkedin_url === "" ? null : linkedin_url;
+    if (linkedin_url !== "" && linkedin_url !== null && !linkedin_url.includes('linkedin.com')) {
+      throw new AppError("linkedin_url must be a valid LinkedIn URL", 400);
+    }
+    updateData.linkedin = linkedin_url === "" ? null : linkedin_url;
   }
+
   if (github_url !== undefined) {
     if (github_url !== "" && typeof github_url !== "string") {
       throw new AppError("github_url must be a string", 400);
     }
-    updateData.github_url = github_url === "" ? null : github_url;
+    if (github_url !== "" && github_url !== null && !github_url.includes('github.com')) {
+      throw new AppError("github_url must be a valid GitHub URL", 400);
+    }
+    updateData.github_link = github_url === "" ? null : github_url;
   }
+
+  // Handle Personal Email
   if (personal_email !== undefined) {
     if (
       personal_email !== "" &&
@@ -774,19 +794,80 @@ export const addBasicDetailsOfTeacher = catchAsync(async (req: Request, res: Res
     ) {
       throw new AppError("Invalid personal_email format", 400);
     }
-    updateData.personal_email = personal_email === "" ? null : personal_email;
+
+    if (personal_email !== "" && personal_email !== null) {
+      const existingTeacher = await prisma.teacher.findFirst({
+        where: {
+          personal_mail: personal_email,
+          id: {
+            not: user.id
+          }
+        }
+      });
+
+      if (existingTeacher) {
+        throw new AppError("Personal email already exists for another teacher", 400);
+      }
+    }
+
+    updateData.personal_mail = personal_email === "" ? null : personal_email;
   }
 
-  // Update teacher by their own user ID
+  if (about !== undefined) {
+    if (about !== "" && typeof about !== "string") {
+      throw new AppError("about must be a string", 400);
+    }
+    if (about !== "" && about !== null) {
+      if (about.length < 10) {
+        throw new AppError("About section must be at least 10 characters long", 400);
+      }
+      if (about.length > 1000) {
+        throw new AppError("About section cannot exceed 1000 characters", 400);
+      }
+    }
+    updateData.about = about === "" ? null : about;
+  }
+
   const updatedTeacher = await prisma.teacher.update({
     where: { id: user.id },
-    data: updateData,
+    data: {
+      ...updateData,
+      updatedAt: new Date()
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      about: true,
+      personal_mail: true,
+      linkedin: true,
+      github_link: true,
+      designation: true,
+      gender: true,
+      createdAt: true,
+      updatedAt: true,
+      center: {
+        select: {
+          id: true,
+          name: true,
+          location: true
+        }
+      }
+    }
   });
+
+  // Track what fields were actually updated
+  const updatedFields = Object.keys(updateData);
 
   res.status(200).json({
     success: true,
     message: "Basic details updated successfully",
-    data: updatedTeacher,
+    data: {
+      teacher: updatedTeacher,
+      updated_fields: updatedFields
+    }
   });
 });
 async function verifyTeacherOwnership(userId: string, researchPaperId: string) {

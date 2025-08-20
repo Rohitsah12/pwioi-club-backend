@@ -21,23 +21,23 @@ model Beacon {
 }
 
 model Class {
-  id          String       @id @default(dbgenerated("gen_random_uuid()"))
+  id             String       @id @default(dbgenerated("gen_random_uuid()"))
   lecture_number String
-  subject_id  String
-  division_id String
-  teacher_id  String
-  room_id     String
-  start_date  DateTime
-  end_date    DateTime
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @default(now()) @map("updated_at")
-  attendances Attendance[]
-  division    Division     @relation(fields: [division_id], references: [id], onDelete: Cascade)
-  room        Room         @relation(fields: [room_id], references: [id], onDelete: Cascade)
-  subject     Subject      @relation(fields: [subject_id], references: [id], onDelete: Cascade)
-  teacher     Teacher      @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
-  scans       Scan[]
-  scanWindows ScanWindow[]
+  subject_id     String
+  division_id    String
+  teacher_id     String
+  room_id        String
+  start_date     DateTime
+  end_date       DateTime
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @default(now()) @map("updated_at")
+  attendances    Attendance[]
+  division       Division     @relation(fields: [division_id], references: [id], onDelete: Cascade)
+  room           Room         @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  subject        Subject      @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  teacher        Teacher      @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  scans          Scan[]
+  scanWindows    ScanWindow[]
 
   @@index([subject_id], map: "class_subject_id_idx")
   @@index([division_id], map: "class_division_id_idx")
@@ -123,204 +123,270 @@ model Room {
 }
 
 model Problem {
-  id                String             @id @default(dbgenerated("gen_random_uuid()"))
+  id                String             @id @default(cuid())
   title             String             @db.VarChar(200)
-  problem_statement String
-  constraints       String?            @db.VarChar(200)
-  difficulty        Difficulty
-  created_by        String
-  is_active         Boolean            @default(true)
-  is_public         Boolean            @default(false)
-  createdAt         DateTime?          @map("created_at")
-  updatedAt         DateTime?          @map("updated_at")
+  problemStatement  String             @default("") @map("problem_statement")
+  constraints       String             @default("")
+  difficulty        Difficulty         @default(Easy)
+  createdBy         String?            @map("created_by")
+  isActive          Boolean            @default(true) @map("is_active")
+  isPublic          Boolean            @default(false) @map("is_public")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  problemWeight     Int                @default(30)
+  testcaseWeight    Int                @default(70)
   contestProblems   ContestProblem[]
-  teacher           Teacher            @relation(fields: [created_by], references: [id], onDelete: Cascade)
-  moderators        ProblemModerator[]
-  tags              ProblemTag[]
+  creator           Teacher?           @relation(fields: [createdBy], references: [id])
+  problemLanguage   ProblemLanguage[]
+  problemModerators ProblemModerator[]
+  problemTags       ProblemTag[]
   submissions       Submission[]
   testCases         TestCase[]
 
-  @@index([created_by], map: "problem_teacher_id_idx")
+  @@index([createdBy])
+  @@index([difficulty])
+  @@index([isActive])
+  @@index([isPublic])
+  @@index([title])
+  @@map("problem")
+}
+
+model ProblemLanguage {
+  id          String              @id @default(cuid())
+  problemId   String              @map("problem_id")
+  languageId  String              @map("language_id")
+  prelude     String              @default("")
+  boilerplate String              @default("")
+  driverCode  String              @default("") @map("driver_code")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @default(now()) @map("updated_at")
+  language    ProgrammingLanguage @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  problem     Problem             @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, languageId])
+  @@index([id])
+  @@index([problemId, languageId])
+  @@map("problem_language")
 }
 
 model ProblemTag {
-  id         String   @id @default(dbgenerated("gen_random_uuid()"))
-  problem_id String
-  tag_id     String
-  createdAt  DateTime @default(now()) @map("created_at")
-  problem    Problem  @relation(fields: [problem_id], references: [id], onDelete: Cascade)
-  tag        Tag      @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  problemId String   @map("problem_id")
+  tagId     String   @map("tag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
-  @@unique([problem_id, tag_id], name: "problem_tag_unique")
+  @@unique([problemId, tagId])
+  @@index([problemId])
+  @@index([tagId])
+  @@map("problem_tag")
 }
 
 model Tag {
-  id          String       @id @default(dbgenerated("gen_random_uuid()"))
-  name        String       @unique @db.VarChar(50)
+  id          String       @id @default(cuid())
+  name        String       @unique
   createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @default(now()) @map("updated_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  contestTags ContestTag[]
   problemTags ProblemTag[]
+
+  @@index([name])
+  @@map("tag")
+}
+
+model ContestTag {
+  id        String   @id @default(cuid())
+  contestId String   @map("contest_id")
+  tagId     String   @map("tag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, tagId])
+  @@index([contestId])
+  @@index([tagId])
+  @@map("contest_tag")
 }
 
 model TestCase {
-  id                String             @id @default(dbgenerated("gen_random_uuid()"))
-  problem_id        String
+  id                String             @id @default(cuid())
+  problemId         String             @map("problem_id")
   input             String             @db.VarChar(200)
-  expected_output   String             @db.VarChar(200)
-  is_sample         Boolean            @default(false)
-  point             Int
+  output            String             @map("expected_output") @db.VarChar(200)
+  isSample          Boolean            @default(false) @map("is_sample")
+  weight            Int                @default(1)
   explanation       String?
-  createdAt         DateTime?          @map("created_at")
-  updatedAt         DateTime           @default(now()) @map("updated_at")
   submissionResults SubmissionResult[]
-  problem           Problem            @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+  problem           Problem            @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
-  @@index([problem_id], map: "test_case_problem_id_idx")
+  @@index([problemId])
+  @@index([isSample])
+  @@map("test_case")
 }
 
 model ProblemModerator {
-  id           String   @id @default(dbgenerated("gen_random_uuid()"))
-  problem_id   String
-  moderator_id String
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @map("updated_at")
-  moderator    Teacher  @relation(fields: [moderator_id], references: [id], onDelete: Cascade)
-  problem      Problem  @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  problemId   String   @map("problem_id")
+  moderatorId String   @map("moderator_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  moderator   Teacher  @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
+  problem     Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
-  @@index([problem_id], map: "problem_moderator_problem_id_idx")
-  @@index([moderator_id], map: "problem_moderator_teacher_id_idx")
+  @@index([problemId])
+  @@index([moderatorId])
+  @@map("problem_moderator")
 }
 
 model Contest {
-  id               String             @id @default(dbgenerated("gen_random_uuid()"))
-  title            String             @db.VarChar(200)
-  description      String?
-  start_time       DateTime
-  end_time         DateTime
-  created_by       String
-  is_open          Boolean            @default(false)
-  createdAt        DateTime?          @map("created_at")
-  updatedAt        DateTime?          @map("updated_at")
-  allowedLanguages AllowedLanguage[]
-  batchContests    BatchContest[]
-  teacher          Teacher            @relation(fields: [created_by], references: [id], onDelete: Cascade)
-  moderators       ContestModerator[]
-  problems         ContestProblem[]
-  submissions      Submission[]
+  id                String             @id @default(cuid())
+  title             String             @db.VarChar(200)
+  description       String             @default("")
+  startTime         DateTime           @default(now()) @map("start_time")
+  endTime           DateTime           @default(now()) @map("end_time")
+  createdBy         String             @map("created_by")
+  isOpen            Boolean            @default(false) @map("is_open")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  allowedLanguages  AllowedLanguage[]
+  batchContests     BatchContest[]
+  creator           Teacher            @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  contestModerators ContestModerator[]
+  contestProblems   ContestProblem[]
+  tags              ContestTag[]
+  submissions       Submission[]
 
-  @@index([created_by], map: "contest_teacher_id_idx")
+  @@index([createdBy])
+  @@index([startTime])
+  @@index([endTime])
+  @@index([isOpen])
+  @@index([title])
+  @@map("contest")
 }
 
 model BatchContest {
-  id         String   @id @default(dbgenerated("gen_random_uuid()"))
-  batch_id   String
-  contest_id String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @default(now()) @map("updated_at")
-  batch      Batch    @relation(fields: [batch_id], references: [id], onDelete: Cascade)
-  contest    Contest  @relation(fields: [contest_id], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  batchId   String   @map("batch_id")
+  contestId String   @map("contest_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  batch     Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
-  @@index([batch_id], map: "batch_contest_batch_id_idx")
-  @@index([contest_id], map: "batch_contest_contest_id_idx")
+  @@index([batchId])
+  @@index([contestId])
+  @@map("batch_contest")
 }
 
 model ProgrammingLanguage {
-  id               String            @id @default(dbgenerated("gen_random_uuid()"))
-  name             String            @db.VarChar(200)
-  judge0_code      Int
+  id               String            @id @default(cuid())
+  name             String            @unique @db.VarChar(200)
+  judge0Code       Int               @unique @map("judge0_code")
   createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @default(now()) @map("updated_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
   allowedLanguages AllowedLanguage[]
+  problemLanguage  ProblemLanguage[]
   submissions      Submission[]
+
+  @@index([name])
+  @@index([judge0Code])
+  @@map("programming_language")
 }
 
 model AllowedLanguage {
-  id          String              @id @default(dbgenerated("gen_random_uuid()"))
-  language_id String
-  contest_id  String
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @default(now()) @map("updated_at")
-  contest     Contest             @relation(fields: [contest_id], references: [id], onDelete: Cascade)
-  language    ProgrammingLanguage @relation(fields: [language_id], references: [id], onDelete: Cascade)
+  id         String              @id @default(cuid())
+  languageId String              @map("language_id")
+  contestId  String              @map("contest_id")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  contest    Contest             @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  language   ProgrammingLanguage @relation(fields: [languageId], references: [id], onDelete: Cascade)
 
-  @@index([language_id], map: "allowed_language_lang_id_idx")
-  @@index([contest_id], map: "allowed_language_contest_id_idx")
+  @@index([languageId])
+  @@index([contestId])
+  @@map("allowed_language")
 }
 
 model ContestModerator {
-  id           String   @id @default(dbgenerated("gen_random_uuid()"))
-  contest_id   String
-  moderator_id String
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @map("updated_at")
-  contest      Contest  @relation(fields: [contest_id], references: [id], onDelete: Cascade)
-  moderator    Teacher  @relation(fields: [moderator_id], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  contestId   String   @map("contest_id")
+  moderatorId String   @map("moderator_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  contest     Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  moderator   Teacher  @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
 
-  @@index([contest_id], map: "contest_moderator_contest_id_idx")
-  @@index([moderator_id], map: "contest_moderator_teacher_id_idx")
+  @@unique([contestId, moderatorId])
+  @@index([contestId])
+  @@index([moderatorId])
+  @@map("contest_moderator")
 }
 
 model ContestProblem {
-  id         String   @id @default(dbgenerated("gen_random_uuid()"))
-  contest_id String
-  problem_id String
-  points     Int      @default(100)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @default(now()) @map("updated_at")
-  contest    Contest  @relation(fields: [contest_id], references: [id], onDelete: Cascade)
-  problem    Problem  @relation(fields: [problem_id], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  contestId String   @map("contest_id")
+  problemId String   @map("problem_id")
+  points    Int      @default(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
-  @@unique([contest_id, problem_id], name: "contest_problem_unique")
-  @@index([contest_id], map: "contest_problem_contest_id_idx")
-  @@index([problem_id], map: "contest_problem_problem_id_idx")
-}
-
-model Submission {
-  id             String              @id @default(dbgenerated("gen_random_uuid()"))
-  user_id        String
-  problem_id     String
-  contest_id     String?
-  language_id    String
-  code           String              @default("")
-  status_id      String
-  execution_time Float?
-  memory_used    Float?
-  submitted_at   DateTime?
-  contest        Contest?            @relation(fields: [contest_id], references: [id], onDelete: Cascade)
-  language       ProgrammingLanguage @relation(fields: [language_id], references: [id], onDelete: Cascade)
-  problem        Problem             @relation(fields: [problem_id], references: [id], onDelete: Cascade)
-  status         SubmissionStatus    @relation(fields: [status_id], references: [id], onDelete: Cascade)
-  student        Student             @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  results        SubmissionResult[]
-
-  @@index([user_id], map: "submission_user_id_idx")
-  @@index([problem_id], map: "submission_problem_id_idx")
-  @@index([contest_id], map: "submission_contest_id_idx")
-  @@index([language_id], map: "submission_language_id_idx")
-  @@index([status_id], map: "submission_status_id_idx")
+  @@unique([contestId, problemId])
+  @@index([contestId])
+  @@index([problemId])
+  @@map("contest_problem")
 }
 
 model SubmissionStatus {
-  id                String             @id @default(dbgenerated("gen_random_uuid()"))
-  name              String             @db.VarChar(200)
-  submissions       Submission[]
+  id   String @id @default(cuid())
+  name String @db.VarChar(200)
+
+  @@index([name])
+  @@map("submission_status")
+}
+
+model Submission {
+  id                String              @id @default(cuid())
+  studentId         String              @map("student_id")
+  problemId         String              @map("problem_id")
+  contestId         String?             @map("contest_id")
+  languageId        String              @map("language_id")
+  code              String              @default("")
+  status            String
+  executionTime     Float?              @map("execution_time")
+  memoryUsed        Float?              @map("memory_used")
+  submittedAt       DateTime            @default(now()) @map("submitted_at")
+  contest           Contest?            @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  language          ProgrammingLanguage @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  problem           Problem             @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  user              Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
   submissionResults SubmissionResult[]
+
+  @@index([studentId])
+  @@index([problemId])
+  @@index([contestId])
+  @@index([languageId])
+  @@index([submittedAt])
+  @@map("submission")
 }
 
 model SubmissionResult {
-  id             String           @id @default(dbgenerated("gen_random_uuid()"))
-  submission_id  String
-  test_case_id   String
-  status_id      String
-  execution_time Float?
-  memory_used    Int?
-  status         SubmissionStatus @relation(fields: [status_id], references: [id], onDelete: Cascade)
-  submission     Submission       @relation(fields: [submission_id], references: [id], onDelete: Cascade)
-  testCase       TestCase         @relation(fields: [test_case_id], references: [id], onDelete: Cascade)
+  id            String     @id @default(cuid())
+  submissionId  String     @map("submission_id")
+  testCaseId    String     @map("test_case_id")
+  status        String
+  executionTime Float?     @map("execution_time")
+  memoryUsed    Int?       @map("memory_used")
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testCase      TestCase   @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
 
-  @@index([submission_id], map: "submission_result_submission_id_idx")
-  @@index([test_case_id], map: "submission_result_test_case_id_idx")
-  @@index([status_id], map: "submission_result_status_id_idx")
+  @@index([submissionId])
+  @@index([testCaseId])
+  @@map("submission_result")
 }
 
 model Center {
@@ -336,8 +402,8 @@ model Center {
   academicHead  Admin?     @relation("AcademicHead", fields: [academic_head], references: [id], onDelete: Cascade)
   businessHead  Admin?     @relation("BusinessHead", fields: [business_head], references: [id], onDelete: Cascade)
   cohorts       Cohort[]
-  policies      Policy[]
   divisions     Division[]
+  policies      Policy[]
   schools       School[]
   students      Student[]
   teachers      Teacher[]
@@ -383,9 +449,9 @@ model School {
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @default(now()) @map("updated_at")
   batches        Batch[]
+  divisions      Division[]
   center         Center          @relation(fields: [center_id], references: [id], onDelete: Cascade)
   students       Student[]
-  divisions      Division[]
   teacherSchools TeacherSchool[]
 
   @@unique([center_id, name], map: "unique_school_name_per_center")
@@ -546,42 +612,41 @@ model Certification {
 }
 
 model Education {
-  id                  String            @id @default(dbgenerated("gen_random_uuid()"))
-  institution         String
-  degree              String
-  field_of_study      String
-  start_date          DateTime
-  end_date            DateTime?
-  grade               Float?
-  createdAt           DateTime          @default(now()) @map("created_at")
-  updatedAt           DateTime          @default(now()) @map("updated_at")
-  ugEducationHistory  AcademicHistory[] @relation("UndergradEducation")
-  xEducationHistory   AcademicHistory[] @relation("XEducation")
-  xiiEducationHistory AcademicHistory[] @relation("XIIEducation")
+  id                              String                   @id @default(dbgenerated("gen_random_uuid()"))
+  institution                     String
+  degree                          String
+  field_of_study                  String
+  start_date                      DateTime
+  end_date                        DateTime?
+  grade                           Float?
+  createdAt                       DateTime                 @default(now()) @map("created_at")
+  updatedAt                       DateTime                 @default(now()) @map("updated_at")
+  ugEducationHistory              AcademicHistory[]        @relation("UndergradEducation")
+  xEducationHistory               AcademicHistory[]        @relation("XEducation")
+  xiiEducationHistory             AcademicHistory[]        @relation("XIIEducation")
+  teacherDoctoralEducationHistory TeacherAcademicHistory[] @relation("TeacherDoctoralEducation")
+  teacherPgEducationHistory       TeacherAcademicHistory[] @relation("TeacherPostgradEducation")
+  teacherUgEducationHistory       TeacherAcademicHistory[] @relation("TeacherUndergradEducation")
   teacherXEducationHistory        TeacherAcademicHistory[] @relation("TeacherXEducation")
   teacherXIIEducationHistory      TeacherAcademicHistory[] @relation("TeacherXIIEducation")
-  teacherUgEducationHistory       TeacherAcademicHistory[] @relation("TeacherUndergradEducation")
-  teacherPgEducationHistory       TeacherAcademicHistory[] @relation("TeacherPostgradEducation")
-  teacherDoctoralEducationHistory TeacherAcademicHistory[] @relation("TeacherDoctoralEducation")
 }
 
 model TeacherAcademicHistory {
-  id            String     @id @default(dbgenerated("gen_random_uuid()"))
-  teacher_id    String     @unique
-  x_education   String?    // Class 10th education
-  xii_education String?    // Class 12th education  
-  undergraduate String?    // Bachelor's degree
-  postgraduate  String?    // Master's degree (NEW - teachers might have this)
-  doctorate     String?    // PhD (NEW - teachers might have this)
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @default(now()) @map("updated_at")
-  
-  teacher       Teacher    @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
-  xEducation    Education? @relation("TeacherXEducation", fields: [x_education], references: [id], onDelete: Cascade)
-  xiiEducation  Education? @relation("TeacherXIIEducation", fields: [xii_education], references: [id], onDelete: Cascade)
-  undergrad     Education? @relation("TeacherUndergradEducation", fields: [undergraduate], references: [id], onDelete: Cascade)
-  postgrad      Education? @relation("TeacherPostgradEducation", fields: [postgraduate], references: [id], onDelete: Cascade)
+  id             String     @id @default(dbgenerated("gen_random_uuid()"))
+  teacher_id     String     @unique
+  x_education    String?
+  xii_education  String?
+  undergraduate  String?
+  postgraduate   String?
+  doctorate      String?
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @default(now()) @map("updated_at")
   doctoralDegree Education? @relation("TeacherDoctoralEducation", fields: [doctorate], references: [id], onDelete: Cascade)
+  postgrad       Education? @relation("TeacherPostgradEducation", fields: [postgraduate], references: [id], onDelete: Cascade)
+  teacher        Teacher    @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  undergrad      Education? @relation("TeacherUndergradEducation", fields: [undergraduate], references: [id], onDelete: Cascade)
+  xEducation     Education? @relation("TeacherXEducation", fields: [x_education], references: [id], onDelete: Cascade)
+  xiiEducation   Education? @relation("TeacherXIIEducation", fields: [xii_education], references: [id], onDelete: Cascade)
 
   @@index([x_education], map: "teacher_academic_history_x_edu_idx")
   @@index([xii_education], map: "teacher_academic_history_xii_edu_idx")
@@ -589,7 +654,6 @@ model TeacherAcademicHistory {
   @@index([postgraduate], map: "teacher_academic_history_pg_edu_idx")
   @@index([doctorate], map: "teacher_academic_history_doc_edu_idx")
 }
-
 
 model AcademicHistory {
   id            String     @id @default(dbgenerated("gen_random_uuid()"))
@@ -608,8 +672,6 @@ model AcademicHistory {
   @@index([xii_education], map: "academic_history_xii_edu_idx")
   @@index([undergraduate], map: "academic_history_ug_edu_idx")
 }
-
-
 
 model Achievement {
   id           String   @id @default(dbgenerated("gen_random_uuid()"))
@@ -641,26 +703,22 @@ model Cohort {
 }
 
 model Division {
-  id               String  @id @default(dbgenerated("gen_random_uuid()"))
-  code             String  @unique
+  id               String    @id @default(dbgenerated("gen_random_uuid()"))
+  code             String    @unique
   center_id        String
   school_id        String
   batch_id         String
-  current_semester String? @unique
-
-  start_date DateTime
-  end_date   DateTime?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
-
-  classes  Class[]
-  batch    Batch     @relation(fields: [batch_id], references: [id], onDelete: Cascade)
-  semester Semester? @relation(fields: [current_semester], references: [id], onDelete: Cascade)
-  students Student[]
-
-  center Center @relation(fields: [center_id], references: [id], onDelete: Cascade)
-  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  current_semester String?   @unique
+  start_date       DateTime
+  end_date         DateTime?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @map("updated_at")
+  classes          Class[]
+  batch            Batch     @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  center           Center    @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  semester         Semester? @relation(fields: [current_semester], references: [id], onDelete: Cascade)
+  school           School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  students         Student[]
 
   @@index([batch_id], map: "division_batch_id_idx")
   @@index([current_semester], map: "division_semester_id_idx")
@@ -686,19 +744,17 @@ model PersonalDetail {
 }
 
 model Batch {
-  id        String   @id @default(dbgenerated("gen_random_uuid()"))
-  name      String   @unique
+  id        String         @id @default(dbgenerated("gen_random_uuid()"))
+  name      String         @unique
   center_id String
   school_id String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
-
-  center Center @relation(fields: [center_id], references: [id], onDelete: Cascade)
-  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
-
-  contests  BatchContest[]
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @default(now()) @map("updated_at")
+  center    Center         @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  school    School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
   divisions Division[]
   students  Student[]
+  contests  BatchContest[]
 
   @@index([center_id], map: "batch_center_id_idx")
   @@index([school_id], map: "batch_school_id_idx")
@@ -707,17 +763,14 @@ model Batch {
 model Semester {
   id          String    @id @default(dbgenerated("gen_random_uuid()"))
   number      Int
-  division    Division? @relation
   division_id String
-
-  start_date DateTime
-  end_date   DateTime?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
-
-  students Student[]
-  subjects Subject[]
+  start_date  DateTime
+  end_date    DateTime?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @map("updated_at")
+  division    Division?
+  students    Student[]
+  subjects    Subject[]
 
   @@index([division_id], map: "semester_division_id_idx")
 }
@@ -812,10 +865,10 @@ model TeacherExperience {
 }
 
 model Teacher {
-  id                 String                 @id @default(dbgenerated("gen_random_uuid()"))
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()"))
   name               String
-  email              String                 @unique
-  phone              String                 @unique
+  email              String                  @unique
+  phone              String                  @unique
   role               TeacherRole
   googleId           String?
   linkedin           String?
@@ -826,25 +879,25 @@ model Teacher {
   designation        String?
   googleAccessToken  String?
   googleRefreshToken String?
-  about              String?   
   googleTokenExpiry  DateTime?
   lastLoginAt        DateTime?
-  createdAt          DateTime               @default(now()) @map("created_at")
-  updatedAt          DateTime               @default(now()) @map("updated_at")
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @default(now()) @map("updated_at")
+  about              String?
   classes            Class[]
   clubOfficials      ClubOfficial[]
-  contests           Contest[]
-  contestModerations ContestModerator[]
-  createdProblems    Problem[]
-  problemModerations ProblemModerator[]
-  examMarks          StudentExamMarks[]     @relation("GradedExams")
+  examMarks          StudentExamMarks[]      @relation("GradedExams")
   subjects           Subject[]
-  center             Center                 @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  center             Center                  @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  academicHistory    TeacherAcademicHistory?
   teacherCohorts     TeacherCohort[]
   teacherExperiences TeacherExperience[]
   researchPapers     TeacherResearchPaper[]
   teacherSchools     TeacherSchool[]
-  academicHistory    TeacherAcademicHistory?
+  contests           Contest[]
+  contestModerations ContestModerator[]
+  createdProblems    Problem[]
+  problemModerations ProblemModerator[]
 
   @@index([center_id], map: "teacher_center_id_idx")
 }
@@ -980,16 +1033,6 @@ model Placement {
   @@index([student_id], map: "placement_student_id_idx")
 }
 
-enum AuthorRole {
-  SUPER_ADMIN
-  ADMIN
-  OPS
-  BATCHOPS
-  TEACHER
-  ASSISTANT_TEACHER
-  STUDENT
-}
-
 model Post {
   id          String      @id @default(dbgenerated("gen_random_uuid()"))
   content     String
@@ -1068,6 +1111,16 @@ model ChangeLog {
   old_data        Json?
   new_data        Json?
   createdAt       DateTime @default(now()) @map("created_at")
+}
+
+enum AuthorRole {
+  SUPER_ADMIN
+  ADMIN
+  OPS
+  BATCHOPS
+  TEACHER
+  ASSISTANT_TEACHER
+  STUDENT
 }
 
 enum AttendanceStatus {

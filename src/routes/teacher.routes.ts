@@ -37,6 +37,7 @@ teacherRoutes.delete("/:teacherId",authenticateJwt,requireRoles("ADMIN", "SUPER_
 
 
 teacherRoutes.patch("/profile/basic-details",authenticateJwt,requireRoles("TEACHER","ASSISTANT_TEACHER"),addBasicDetailsOfTeacher)
+// teacherRoutes.get("/profile/basic-details",authenticateJwt,getTeacherBasicDetails)
 teacherRoutes.post("/profile/experiences",authenticateJwt,requireRoles("TEACHER","ASSISTANT_TEACHER"),addTeacherExperience);
 teacherRoutes.patch("/profile/experiences/:experienceId",authenticateJwt,requireRoles("TEACHER","ASSISTANT_TEACHER"),updateTeacherExperience);
 teacherRoutes.delete("/profile/experiences/:experienceId",authenticateJwt,requireRoles("TEACHER","ASSISTANT_TEACHER"),deleteTeacherExperience);

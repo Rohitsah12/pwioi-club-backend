@@ -57,6 +57,7 @@ app.use("/api/student-academics",studentAcademicsRoutes)
 app.use("/api/subjects",subjectRoutes)
 app.use("/api/exams",examRoutes)
 app.use("/api/teacher-courses",teacherCourseRoutes)
+// app.use("/api/teacher-attendance",)
 
 
 
