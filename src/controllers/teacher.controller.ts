@@ -484,6 +484,90 @@ export const addTeacherExperience = catchAsync(
   }
 );
 
+export const getAssistantTeachers = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user!;
+  
+  if (!user) {
+    throw new AppError("Teacher is not authenticated", 400);
+  }
+
+  const teacher = await prisma.teacher.findUnique({
+    where: {
+      id: user.id
+    },
+    select: {
+      center_id: true,
+      name: true
+    }
+  });
+
+  if (!teacher) {
+    throw new AppError("Teacher not found", 404);
+  }
+
+  // Fetch all assistant teachers in the same center
+  const assistantTeachers = await prisma.teacher.findMany({
+    where: {
+      center_id: teacher.center_id,
+      role: "ASSISTANT_TEACHER"
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      designation: true,
+      linkedin: true,
+      personal_mail: true,
+      github_link: true,
+      gender: true,
+      about: true,
+      createdAt: true,
+      updatedAt: true,
+      // Include related data if needed
+      center: {
+        select: {
+          id: true,
+          name: true,
+          location: true
+        }
+      },
+      teacherSchools: {
+        select: {
+          specialisation: true,
+          school: {
+            select: {
+              name: true
+            }
+          }
+        }
+      },
+      subjects: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          credits: true
+        }
+      }
+    },
+    orderBy: {
+      name: 'asc'
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Assistant teachers fetched successfully",
+    data: {
+      center: {
+        id: teacher.center_id,
+        total_assistant_teachers: assistantTeachers.length
+      },
+      assistant_teachers: assistantTeachers
+    }
+  });
+});
 export const updateTeacherExperience = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;

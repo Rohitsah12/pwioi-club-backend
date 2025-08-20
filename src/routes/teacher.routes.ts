@@ -10,6 +10,7 @@ import {
   deleteTeacherExperience,
   deleteTeacherResearhPaper,
   getActiveSubjectAttendance,
+  getAssistantTeachers,
   getTeacherAllExperience,
   getTeacherAllResearchPapers,
   getTeacherById,
@@ -51,4 +52,6 @@ teacherRoutes.get("/profile/research-papers/:researchPaperId",authenticateJwt,ge
 
 
 teacherRoutes.get("/me/active-subject-attendance",authenticateJwt,requireRoles("TEACHER"),getActiveSubjectAttendance)
+
+teacherRoutes.get("/assistant-teachers",authenticateJwt,getAssistantTeachers)
 export default teacherRoutes;
