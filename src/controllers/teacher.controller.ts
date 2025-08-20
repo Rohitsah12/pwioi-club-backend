@@ -568,6 +568,67 @@ export const getAssistantTeachers = catchAsync(async (req: Request, res: Respons
     }
   });
 });
+
+export const getCenterBatches = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user!;
+  
+  if (!user) {
+    throw new AppError("Teacher is not authenticated", 400);
+  }
+
+  const teacher = await prisma.teacher.findUnique({
+    where: {
+      id: user.id
+    },
+    select: {
+      center_id: true,
+      name: true
+    }
+  });
+
+  if (!teacher) {
+    throw new AppError("Teacher not found", 404);
+  }
+
+  const batches = await prisma.batch.findMany({
+    where: {
+      center_id: teacher.center_id
+    },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+      center: {
+        select: {
+          id: true,
+          name: true,
+          location: true,
+          code: true
+        }
+      },
+    },
+    orderBy: {
+      name: 'asc'
+    }
+  });
+
+  const batchStats = batches.map(batch => ({
+    ...batch,
+  }));
+
+  res.status(200).json({
+    success: true,
+    message: "Center batches fetched successfully",
+    data: {
+      center: {
+        id: teacher.center_id,
+        total_batches: batches.length
+      },
+      batches: batchStats
+    }
+  });
+});
 export const updateTeacherExperience = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
