@@ -485,7 +485,7 @@ export const addTeacherExperience = catchAsync(
 );
 
 export const getAssistantTeachers = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user!;
+  const user = req.user;
   
   if (!user) {
     throw new AppError("Teacher is not authenticated", 400);
@@ -740,16 +740,7 @@ const researchPaperCreateSchema = z.object({
 
 const researchPaperUpdateSchema = researchPaperCreateSchema.partial();
 
-// export const getTeacherBasicDetails=catchAsync(async (req:Request,res:Response)=>{
-//   const teahcerId=req.user!.id;
 
-
-//   const teacher=await prisma.teacher.findUnique({
-//     where:
-//   })
-
-
-// })
 export const addBasicDetailsOfTeacher = catchAsync(async (req: Request, res: Response) => {
   const user = req.user!;
   const { linkedin_url, github_url, personal_email, about } = req.body;
@@ -869,6 +860,95 @@ export const addBasicDetailsOfTeacher = catchAsync(async (req: Request, res: Res
       updated_fields: updatedFields
     }
   });
+});
+
+export const getTeacherBasicDetails = catchAsync(async (req: Request, res: Response) => {
+  const { id: teacherId } = req.user!;
+
+  if (!teacherId) {
+    throw new AppError("Teacher ID not found in token", 400);
+  }
+
+  const teacher = await prisma.teacher.findUnique({
+    where: { id: teacherId },
+    select: {
+      linkedin: true,
+      github_link: true,
+      personal_mail: true,
+      about: true
+    }
+  });
+
+  if (!teacher) {
+    throw new AppError("Teacher not found", 404);
+  }
+
+  const response = {
+    success: true,
+    data: teacher
+  };
+
+  res.status(200).json(response);
+});
+
+
+export const deleteTeacherBasicDetails = catchAsync(async (req: Request, res: Response) => {
+  const { id: teacherId } = req.user!;
+  const { field } = req.query;
+
+  if (!teacherId) {
+    throw new AppError("Teacher ID not found in token", 400);
+  }
+
+  if (!field || (field !== 'github' && field !== 'linkedin')) {
+    throw new AppError("Invalid field. Use 'github' or 'linkedin' as query parameter", 400);
+  }
+
+  const existingTeacher = await prisma.teacher.findUnique({
+    where: { id: teacherId },
+    select: { 
+      id: true, 
+      name: true, 
+      github_link: true, 
+      linkedin: true 
+    }
+  });
+
+  if (!existingTeacher) {
+    throw new AppError("Teacher not found", 404);
+  }
+
+  const updateData: any = { updatedAt: new Date() };
+  let fieldName = '';
+  let currentValue = null;
+
+  if (field === 'github') {
+    updateData.github_link = null;
+    fieldName = 'GitHub URL';
+    currentValue = existingTeacher.github_link;
+  } else if (field === 'linkedin') {
+    updateData.linkedin = null;
+    fieldName = 'LinkedIn URL';
+    currentValue = existingTeacher.linkedin;
+  }
+
+  if (!currentValue) {
+    throw new AppError(`${fieldName} is already empty`, 400);
+  }
+
+  // Update the specific field
+  await prisma.teacher.update({
+    where: { id: teacherId },
+    data: updateData
+  });
+
+  const response = {
+    success: true,
+    message: `${fieldName} deleted successfully`,
+    field: field as string
+  };
+
+  res.status(200).json(response);
 });
 async function verifyTeacherOwnership(userId: string, researchPaperId: string) {
   const association = await prisma.teacherResearchPaper.findFirst({
