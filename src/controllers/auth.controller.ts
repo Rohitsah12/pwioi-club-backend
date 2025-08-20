@@ -4,8 +4,7 @@ import { AppError } from "../utils/AppError.js";
 import { authenticateUserWithGoogle } from "../auth/googleOAuth.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../auth/jwt.js"; 
 import { findUserById } from '../service/userService.js';
-import { success } from "zod";
-import { tr } from "zod/locales";
+
 
 const googleLogin = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { code, role } = req.body;
