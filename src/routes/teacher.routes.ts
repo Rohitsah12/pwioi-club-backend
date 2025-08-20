@@ -16,6 +16,7 @@ import {
   getTeacherAllResearchPapers,
   getTeacherBasicDetails,
   getTeacherById,
+  getTeacherDivisionAndStudentCounts,
   getTeacherExperienceById,
   getTeacherResearchPaperById,
   getTeachersByCenterId,
@@ -30,6 +31,8 @@ const upload = multer();
 
 teacherRoutes.post("/bulk", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), bulkCreateTeachers);
 teacherRoutes.post("/upload", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), upload.single("file"), createTeachersFromExcel);
+
+teacherRoutes.get("/counts",authenticateJwt,requireRoles("TEACHER", "ASSISTANT_TEACHER"),getTeacherDivisionAndStudentCounts);
 
 teacherRoutes.patch("/profile/basic-details", authenticateJwt, requireRoles("TEACHER","ASSISTANT_TEACHER"), addBasicDetailsOfTeacher);
 teacherRoutes.get("/profile/basic-details",authenticateJwt,requireRoles("TEACHER", "ASSISTANT_TEACHER"),getTeacherBasicDetails);

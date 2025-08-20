@@ -891,6 +891,58 @@ export const getTeacherBasicDetails = catchAsync(async (req: Request, res: Respo
   res.status(200).json(response);
 });
 
+export const getTeacherDivisionAndStudentCounts = catchAsync(async (req: Request, res: Response) => {
+  const { id: teacherId } = req.user!;
+
+  if (!teacherId) {
+    throw new AppError("Teacher ID not found in token", 400);
+  }
+
+  const teacher = await prisma.teacher.findUnique({
+    where: { id: teacherId },
+    select: { id: true }
+  });
+
+  if (!teacher) {
+    throw new AppError("Teacher not found", 404);
+  }
+
+  const divisionsData = await prisma.subject.findMany({
+    where: {
+      teacher_id: teacherId
+    },
+    select: {
+      semester: {
+        select: {
+          division_id: true
+        }
+      }
+    }
+  });
+
+  const uniqueDivisionIds = [...new Set(divisionsData.map(subject => subject.semester.division_id))];
+  
+  const totalDivisions = uniqueDivisionIds.length;
+
+  const totalStudents = await prisma.student.count({
+    where: {
+      division_id: {
+        in: uniqueDivisionIds
+      },
+      is_active: true
+    }
+  });
+
+  const response = {
+    success: true,
+    data: {
+      totalDivisions,
+      totalStudents
+    }
+  };
+
+  res.status(200).json(response);
+});
 
 export const deleteTeacherBasicDetails = catchAsync(async (req: Request, res: Response) => {
   const { id: teacherId } = req.user!;
