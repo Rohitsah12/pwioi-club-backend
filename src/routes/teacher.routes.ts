@@ -8,6 +8,7 @@ import {
   bulkCreateTeachers,
   createOrUpdateTeacherAcademicHistory,
   createTeachersFromExcel,
+  deleteTeacherBasicDetails,
   deleteTeacherEducationById,
   deleteTeacherExperience,
   deleteTeacherResearhPaper,
@@ -40,7 +41,7 @@ teacherRoutes.get("/counts",authenticateJwt,requireRoles("TEACHER", "ASSISTANT_T
 
 teacherRoutes.patch("/profile/basic-details", authenticateJwt, requireRoles("TEACHER","ASSISTANT_TEACHER"), addBasicDetailsOfTeacher);
 teacherRoutes.get("/profile/basic-details",authenticateJwt,requireRoles("TEACHER", "ASSISTANT_TEACHER"),getTeacherBasicDetails);
-teacherRoutes.delete("/profile/basic-details",authenticateJwt,requireRoles("TEACHER", "ASSISTANT_TEACHER"),getTeacherBasicDetails);
+teacherRoutes.delete("/profile/basic-details",authenticateJwt,requireRoles("TEACHER", "ASSISTANT_TEACHER"),deleteTeacherBasicDetails);
 
 teacherRoutes.post("/profile/experiences", authenticateJwt, requireRoles("TEACHER","ASSISTANT_TEACHER"), addTeacherExperience);
 teacherRoutes.get("/profile/experiences", authenticateJwt, getTeacherAllExperience);
