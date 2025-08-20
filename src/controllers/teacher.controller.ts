@@ -1002,6 +1002,271 @@ export const deleteTeacherBasicDetails = catchAsync(async (req: Request, res: Re
 
   res.status(200).json(response);
 });
+
+
+interface TeacherAcademicHistoryBody {
+    x_education?: EducationData;
+    xii_education?: EducationData;
+    undergraduate?: EducationData;
+    postgraduate?: EducationData;
+    doctorate?: EducationData;
+}
+
+interface EducationData {
+    id?: string;
+    institution: string;
+    degree: string;
+    field_of_study: string;
+    start_date: string;
+    end_date?: string;
+    grade?: number;
+}
+const validateDate = (date: string | Date): boolean => {
+    const parsedDate = new Date(date);
+    return !isNaN(parsedDate.getTime());
+};
+export const createOrUpdateTeacherAcademicHistory = catchAsync(async (req: Request, res: Response) => {
+    const { teacherId } = req.params;
+
+    if (!teacherId) {
+        throw new AppError("Teacher ID is required.", 400);
+    }
+
+    await checkTeacherExists(teacherId);
+
+    const { x_education, xii_education, undergraduate, postgraduate, doctorate }: TeacherAcademicHistoryBody = req.body;
+
+    const validateEducationData = (education: EducationData, type: string) => {
+        if (!education.institution || typeof education.institution !== "string") {
+            throw new AppError(`${type} institution is required and must be a string.`, 400);
+        }
+        if (!education.degree || typeof education.degree !== "string") {
+            throw new AppError(`${type} degree is required and must be a string.`, 400);
+        }
+        if (!education.field_of_study || typeof education.field_of_study !== "string") {
+            throw new AppError(`${type} field of study is required and must be a string.`, 400);
+        }
+        if (!education.start_date || !validateDate(education.start_date)) {
+            throw new AppError(`${type} start date is required and must be a valid date.`, 400);
+        }
+        if (education.end_date && !validateDate(education.end_date)) {
+            throw new AppError(`${type} end date must be a valid date.`, 400);
+        }
+        if (education.grade !== undefined && education.grade !== null && (typeof education.grade !== "number" || education.grade < 0 || education.grade > 100)) {
+            throw new AppError(`${type} grade must be a number between 0 and 100.`, 400);
+        }
+    };
+
+    if (x_education) validateEducationData(x_education, "Class X");
+    if (xii_education) validateEducationData(xii_education, "Class XII");
+    if (undergraduate) validateEducationData(undergraduate, "Undergraduate");
+    if (postgraduate) validateEducationData(postgraduate, "Postgraduate");
+    if (doctorate) validateEducationData(doctorate, "Doctorate");
+
+    async function upsertEducation(educationData: EducationData): Promise<string | null> {
+        if (!educationData) return null;
+
+        const { id, institution, degree, field_of_study, start_date, end_date, grade } = educationData;
+
+        const data = {
+            institution,
+            degree,
+            field_of_study,
+            start_date: new Date(start_date),
+            end_date: end_date ? new Date(end_date) : null,
+            grade: grade || null
+        };
+
+        if (id) {
+            const existingEducation = await prisma.education.findUnique({ where: { id } });
+            if (!existingEducation) {
+                throw new AppError(`Education record with ID ${id} not found.`, 404);
+            }
+
+            const updated = await prisma.education.update({
+                where: { id },
+                data
+            });
+            return updated.id;
+        } else {
+            const created = await prisma.education.create({ data });
+            return created.id;
+        }
+    }
+
+    const xId = x_education ? await upsertEducation(x_education) : null;
+    const xiiId = xii_education ? await upsertEducation(xii_education) : null;
+    const ugId = undergraduate ? await upsertEducation(undergraduate) : null;
+    const pgId = postgraduate ? await upsertEducation(postgraduate) : null;
+    const docId = doctorate ? await upsertEducation(doctorate) : null;
+
+    // Prepare update object only with provided fields
+    const updateData: any = {};
+    if (x_education !== undefined) updateData.x_education = xId;
+    if (xii_education !== undefined) updateData.xii_education = xiiId;
+    if (undergraduate !== undefined) updateData.undergraduate = ugId;
+    if (postgraduate !== undefined) updateData.postgraduate = pgId;
+    if (doctorate !== undefined) updateData.doctorate = docId;
+
+    const academicHistory = await prisma.teacherAcademicHistory.upsert({
+        where: { teacher_id: teacherId },
+        update: updateData,
+        create: {
+            teacher_id: teacherId,
+            x_education: xId,
+            xii_education: xiiId,
+            undergraduate: ugId,
+            postgraduate: pgId,
+            doctorate: docId,
+        }
+    });
+
+    const result = await prisma.teacherAcademicHistory.findUnique({
+        where: { teacher_id: teacherId },
+        include: {
+            xEducation: true,
+            xiiEducation: true,
+            undergrad: true,
+            postgrad: true,
+            doctoralDegree: true,
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Teacher academic history saved successfully.",
+        data: result
+    });
+});
+
+export const getTeacherAcademicHistory = catchAsync(async (req: Request, res: Response) => {
+    const { teacherId } = req.params;
+    
+    if (!teacherId) {
+        throw new AppError("Teacher ID is required.", 400);
+    }
+    
+    await checkTeacherExists(teacherId);
+    
+    const academicHistory = await prisma.teacherAcademicHistory.findUnique({
+        where: { teacher_id: teacherId },
+        include: {
+            xEducation: true,
+            xiiEducation: true,
+            undergrad: true,
+            postgrad: true,
+            doctoralDegree: true,
+        }
+    });
+
+    // Return empty structure if not found
+    res.status(200).json({
+        success: true,
+        data: academicHistory || {
+            teacher_id: teacherId,
+            x_education: null,
+            xii_education: null,
+            undergraduate: null,
+            postgraduate: null,
+            doctorate: null,
+            xEducation: null,
+            xiiEducation: null,
+            undergrad: null,
+            postgrad: null,
+            doctoralDegree: null
+        }
+    });
+});
+
+export const deleteTeacherEducationById = catchAsync(async (req: Request, res: Response) => {
+    const { teacherId, educationId } = req.params;
+
+    if (!teacherId) {
+        throw new AppError("Teacher ID is required.", 400);
+    }
+
+    if (!educationId) {
+        throw new AppError("Education ID is required.", 400);
+    }
+
+    await checkTeacherExists(teacherId);
+
+    // Check if the education record exists
+    const education = await prisma.education.findUnique({
+        where: { id: educationId }
+    });
+
+    if (!education) {
+        throw new AppError("Education record not found.", 404);
+    }
+
+    // Find the teacher's academic history
+    const academicHistory = await prisma.teacherAcademicHistory.findUnique({
+        where: { teacher_id: teacherId }
+    });
+
+    if (!academicHistory) {
+        throw new AppError("Teacher academic history not found.", 404);
+    }
+
+    // Check if this education belongs to this teacher
+    const educationBelongsToTeacher = [
+        academicHistory.x_education,
+        academicHistory.xii_education,
+        academicHistory.undergraduate,
+        academicHistory.postgraduate,
+        academicHistory.doctorate
+    ].includes(educationId);
+
+    if (!educationBelongsToTeacher) {
+        throw new AppError("This education record does not belong to the specified teacher.", 403);
+    }
+
+    // Determine which field to update to null
+    const updateData: any = {};
+    if (academicHistory.x_education === educationId) {
+        updateData.x_education = null;
+    }
+    if (academicHistory.xii_education === educationId) {
+        updateData.xii_education = null;
+    }
+    if (academicHistory.undergraduate === educationId) {
+        updateData.undergraduate = null;
+    }
+    if (academicHistory.postgraduate === educationId) {
+        updateData.postgraduate = null;
+    }
+    if (academicHistory.doctorate === educationId) {
+        updateData.doctorate = null;
+    }
+
+    // Update the academic history to remove the reference
+    await prisma.teacherAcademicHistory.update({
+        where: { teacher_id: teacherId },
+        data: updateData
+    });
+
+    // Delete the education record
+    await prisma.education.delete({
+        where: { id: educationId }
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Education record deleted successfully."
+    });
+});
+
+// Helper function to check if teacher exists
+async function checkTeacherExists(teacherId: string): Promise<void> {
+    const teacher = await prisma.teacher.findUnique({
+        where: { id: teacherId }
+    });
+    
+    if (!teacher) {
+        throw new AppError("Teacher not found.", 404);
+    }
+}
 async function verifyTeacherOwnership(userId: string, researchPaperId: string) {
   const association = await prisma.teacherResearchPaper.findFirst({
     where: { teacher_id: userId, research_paper_id: researchPaperId },

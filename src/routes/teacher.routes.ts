@@ -6,12 +6,15 @@ import {
   addTeacherExperience,
   addTeacherResearchPapers,
   bulkCreateTeachers,
+  createOrUpdateTeacherAcademicHistory,
   createTeachersFromExcel,
+  deleteTeacherEducationById,
   deleteTeacherExperience,
   deleteTeacherResearhPaper,
   getActiveSubjectAttendance,
   getAssistantTeachers,
   getCenterBatches,
+  getTeacherAcademicHistory,
   getTeacherAllExperience,
   getTeacherAllResearchPapers,
   getTeacherBasicDetails,
@@ -28,6 +31,7 @@ import {
 
 const teacherRoutes = express.Router();
 const upload = multer(); 
+
 
 teacherRoutes.post("/bulk", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), bulkCreateTeachers);
 teacherRoutes.post("/upload", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), upload.single("file"), createTeachersFromExcel);
@@ -49,6 +53,10 @@ teacherRoutes.get("/profile/research-papers", authenticateJwt, getTeacherAllRese
 teacherRoutes.get("/profile/research-papers/:researchPaperId", authenticateJwt, getTeacherResearchPaperById);
 teacherRoutes.patch("/profile/research-papers/:researchPaperId", authenticateJwt, requireRoles("TEACHER","ASSISTANT_TEACHER"), updateTeacherResearchPaper);
 teacherRoutes.delete("/profile/research-papers/:researchPaperId", authenticateJwt, requireRoles("TEACHER","ASSISTANT_TEACHER"), deleteTeacherResearhPaper);
+
+teacherRoutes.patch("/:teacherId/academic-history", authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER"), createOrUpdateTeacherAcademicHistory)
+teacherRoutes.get("/:teacherId/academic-history", authenticateJwt, getTeacherAcademicHistory)
+teacherRoutes.delete("/:teacherId/academic-history/:educationId", authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER"), deleteTeacherEducationById)
 
 teacherRoutes.get("/me/active-subject-attendance", authenticateJwt, requireRoles("TEACHER"), getActiveSubjectAttendance);
 teacherRoutes.get("/assistant-teachers", authenticateJwt, getAssistantTeachers);
