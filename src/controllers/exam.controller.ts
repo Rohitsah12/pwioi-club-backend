@@ -343,7 +343,6 @@ export const createExam = catchAsync(async (req: Request, res: Response) => {
 
   res.status(201).json(response);
 });
-
 interface UpdateExamResponse {
   success: boolean;
   message: string;

@@ -116,12 +116,15 @@ model WindowScanMapping {
 model Room {
   id        String   @id @default(dbgenerated("gen_random_uuid()"))
   name      String
+  center_id String   // Add this field
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")
   beacons   Beacon[]
   classes   Class[]
-}
+  center    Center   @relation(fields: [center_id], references: [id], onDelete: Cascade) // Add this relation
 
+  @@index([center_id], map: "room_center_id_idx") // Add this index
+}
 model Problem {
   id                String             @id @default(cuid())
   title             String             @db.VarChar(200)
@@ -404,6 +407,7 @@ model Center {
   cohorts       Cohort[]
   divisions     Division[]
   policies      Policy[]
+  rooms         Room[]     // Add this line
   schools       School[]
   students      Student[]
   teachers      Teacher[]
@@ -1077,7 +1081,7 @@ model PostMedia {
   id            String   @id @default(dbgenerated("gen_random_uuid()"))
   type          String
   mime_type     String
-  storage_url   String
+  s3_key        String  @default("")
   thumbnail_url String?
   duration      String?
   post_id       String

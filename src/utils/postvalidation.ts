@@ -1,5 +1,5 @@
 import { AppError } from './AppError.js';
-import { AuthorRole } from '../types/postApi.js';
+import { AuthorRole, type MediaInput } from '../types/postApi.js';
 
 export const validatePostContent = (content?: string, media?: any[]): void => {
   if (!content && (!media || media.length === 0)) {
@@ -23,3 +23,8 @@ export const validateRequiredFields = <T extends Record<string, any>>(
   }
 };
 
+export const validateMediaStructure = (media: MediaInput[]): void => {
+  for (const item of media) {
+    validateRequiredFields<MediaInput>(['type', 'mime_type', 's3_key'], item);
+  }
+};

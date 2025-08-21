@@ -2,13 +2,32 @@ import { prisma } from "../db/prisma.js";
 import { catchAsync } from "../utils/catchAsync.js";
 import { AppError } from "../utils/AppError.js";
 import type { Request, Response } from "express";
+import { getSignedGetUrl } from "../utils/s3.js";
 
 export const createPost = catchAsync(async (req: Request, res: Response) => {
+
+  console.log("=== POST CREATE DEBUG ===");
+  console.log("Full request body:", JSON.stringify(req.body, null, 2));
+  console.log("Content:", req.body.content);
+  console.log("Media array:", req.body.media);
+  console.log("User:", req.user);
+  console.log("========================");
   const { content, media } = req.body;
+
   const { id: authorId, role: authorRole } = req.user!;
 
-  if (!content && (!media || media.length === 0))
+  // Validate required fields
+  if (!content?.trim() && (!media || media.length === 0)) {
     throw new AppError("Post must have content or media", 400);
+  }
+  // Validate media structure
+  if (media && media.length > 0) {
+    for (const item of media) {
+      if (!item.type || !item.mime_type || !item.s3_key) {  // Changed from 'key' to 's3_key'
+        throw new AppError("Invalid media data structure", 400);
+      }
+    }
+  }
 
   let authorExists = null;
   if (["SUPER_ADMIN", "ADMIN", "OPS", "BATCHOPS"].includes(authorRole)) {
@@ -20,24 +39,24 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
   }
   if (!authorExists) throw new AppError("Author not found", 404);
 
-  const newPost = await prisma.post.create({
-    data: {
-      content,
-      author_id: authorId,
-      author_type: authorRole,
-      media: {
-        create: media?.map((m: any) => ({
-          type: m.type,
-          mime_type: m.mime_type,
-          storage_url: m.storage_url,
-          thumbnail_url: m.thumbnail_url || null,
-          duration: m.duration || null
-        }))
-      },
-      likes: 0
+ const newPost = await prisma.post.create({
+  data: {
+    content: content?.trim(),
+    author_id: authorId,
+    author_type: authorRole,
+    media: {
+      create: media?.map((m: any) => ({
+        type: m.type,
+        mime_type: m.mime_type,
+        s3_key: m.s3_key, 
+        thumbnail_url: m.thumbnail_url || null,  
+        duration: m.duration || null
+      }))
     },
-    include: { media: true }
-  });
+    likes: 0
+  },
+  include: { media: true }
+});
 
   res.status(201).json({ success: true, data: newPost });
 });
@@ -83,9 +102,15 @@ export const getPosts = catchAsync(async (req: Request, res: Response) => {
 
   const postsWithUserInfo = await Promise.all(
     posts.map(async (post) => {
-      let userInfo: { 
-        name?: string; 
-        designation?: string | null; 
+      const mediaWithSignedUrls = await Promise.all(
+        post.media.map(async (m) => ({
+          ...m,
+          signedUrl: await getSignedGetUrl(m.s3_key),
+        }))
+      );
+      let userInfo: {
+        name?: string;
+        designation?: string | null;
         schoolName?: string;
       } = {};
 
@@ -183,6 +208,7 @@ export const getPosts = catchAsync(async (req: Request, res: Response) => {
 
       return {
         ...post,
+        media: mediaWithSignedUrls,
         userInfo,
         comments: commentsWithUserInfo,
         totalCommentsCount: post._count.comments,
@@ -209,6 +235,12 @@ export const getPostById = catchAsync(async (req: Request, res: Response) => {
   });
 
   if (!post) throw new AppError("Post not found", 404);
+  const mediaWithSignedUrls = await Promise.all(
+    post.media.map(async (m) => ({
+      ...m,
+      signedUrl: await getSignedGetUrl(m.s3_key),
+    }))
+  );
 
   let userInfo: { designation?: string | null; schoolName?: string } = {};
 
@@ -251,12 +283,11 @@ export const getPostById = catchAsync(async (req: Request, res: Response) => {
     success: true,
     data: {
       ...post,
+      media: mediaWithSignedUrls,
       userInfo,
     },
   });
 });
-
-
 
 export const updatePost = catchAsync(async (req: Request, res: Response) => {
   const { postId } = req.params;

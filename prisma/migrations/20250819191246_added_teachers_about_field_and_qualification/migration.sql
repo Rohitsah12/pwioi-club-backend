@@ -5,7 +5,7 @@ ALTER TABLE "public"."Teacher" ADD COLUMN     "about" TEXT;
 CREATE TABLE "public"."TeacherAcademicHistory" (
     "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "teacher_id" TEXT NOT NULL,
-    "x_education" TEXT,          
+    "x_education" TEXT,
     "xii_education" TEXT,
     "undergraduate" TEXT,
     "postgraduate" TEXT,
