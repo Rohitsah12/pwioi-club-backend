@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma.js";
 import { RoleType } from "@prisma/client";
 import { AppError } from "../utils/AppError.js";
 import { catchAsync } from "../utils/catchAsync.js";
+import { tr } from "zod/locales";
 
 export const createSuperAdmin = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -19,17 +20,29 @@ export const createSuperAdmin = catchAsync(
         });
 
         const superAdmin = await prisma.admin.create({
-            data: {
-                name,
-                email,
-                phone,
-                role_id: superAdminRole.id,
-                designation
-            },
-            include: {
-                role: true
+    data: {
+        name,
+        email,
+        phone,
+        role_id: superAdminRole.id,
+        designation
+    },
+    select: {
+        id:true,
+        name: true,
+        email: true,
+        phone: true,
+        role_id: true,
+        designation: true,
+        role: {
+            select: {
+                id: true,
+                role: true,
+                // Add other role fields you need
             }
-        });
+        }
+    }
+});
 
         return res.status(201).json({
             status: "success",

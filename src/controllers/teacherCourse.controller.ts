@@ -80,6 +80,90 @@ export const getTeacherActiveSubjects = catchAsync(async (req: Request, res: Res
   });
 });
 
+interface CompletedSubjectDetail {
+  subjectName: string;
+  batchName: string;
+  divisionCode: string;
+  semester: number;
+  totalStudents: number;
+}
+
+interface CompletedSubjectsResponse {
+  success: boolean;
+  count: number;
+  data: CompletedSubjectDetail[];
+}
+
+export const getTeachersCompletedSubject = catchAsync(async (req: Request, res: Response) => {
+  const { id: teacherId } = req.user!;
+
+  const teacher = await prisma.teacher.findUnique({
+    where: { id: teacherId },
+    select: { id: true }
+  });
+
+  if (!teacher) {
+    throw new AppError("Teacher not found", 404);
+  }
+
+  const currentDate = new Date();
+
+  const completedSubjects = await prisma.subject.findMany({
+    where: {
+      teacher_id: teacherId,
+      semester: {
+        end_date: {
+          lt: currentDate 
+        }
+      }
+    },
+    select: {
+      name: true,
+      semester: {
+        select: {
+          number: true,
+          division: {
+            select: {
+              code: true,
+              batch: {
+                select: {
+                  name: true
+                }
+              },
+              students: {
+                where: { is_active: true },
+                select: { id: true }
+              }
+            }
+          }
+        }
+      }
+    },
+    orderBy: {
+      semester: {
+        end_date: 'desc' 
+      }
+    }
+  });
+
+  // Process and format the data
+  const completedSubjectDetails: CompletedSubjectDetail[] = completedSubjects.map((subject) => ({
+    subjectName: subject.name,
+    batchName: subject.semester.division!.batch.name,
+    divisionCode: subject.semester.division!.code,
+    semester: subject.semester.number,
+    totalStudents: subject.semester.division!.students.length
+  }));
+
+  const response: CompletedSubjectsResponse = {
+    success: true,
+    count: completedSubjectDetails.length,
+    data: completedSubjectDetails
+  };
+
+  res.status(200).json(response);
+});
+
 export const getExamsAndPassStatsByType = catchAsync(async (req: Request, res: Response) => {
   const { subjectId } = req.params;
   const { examType } = req.query;

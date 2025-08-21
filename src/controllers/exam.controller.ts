@@ -142,3 +142,82 @@ export const uploadExamMarks = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: 'An unexpected error occurred during file processing.' });
   }
 };
+
+export const getAllExamByExamType = async (req:Request, res:Response) => {
+  try {
+    const { subjectId } = req.params;
+    const { exam_type } = req.body;
+    if (!subjectId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subject ID is required'
+      });
+    }
+
+    if (!exam_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Exam type is required in request body'
+      });
+    }
+
+    const validExamTypes = ['END_SEM', 'PROJECT', 'FORTNIGHTLY', 'INTERNAL_ASSESSMENT', 'INTERVIEW'];
+    if (!validExamTypes.includes(exam_type)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid exam type. Valid types are: ${validExamTypes.join(', ')}`
+      });
+    }
+
+    const subject = await prisma.subject.findUnique({
+      where: { id: subjectId }
+    });
+
+    if (!subject) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subject not found'
+      });
+    }
+
+    const exams = await prisma.exam.findMany({
+      where: {
+        subject_id: subjectId,
+        exam_type: exam_type
+      },
+      select: {
+        id: true,
+        name: true
+      },
+      orderBy: {
+        exam_date: 'asc'
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Exams fetched successfully',
+      data: {
+        exams,
+        count: exams.length,
+        subject: {
+          id: subject.id,
+          name: subject.name,
+          code: subject.code
+        },
+        exam_type
+      }
+    });
+
+  }  catch (error) {
+    console.error('Error fetching exams:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    });
+  }
+};
