@@ -1,8 +1,10 @@
+// src/services/googleCalendar.service.ts
+
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../db/prisma.js';
 import { AppError } from '../utils/AppError.js';
-import { addMinutes, format } from 'date-fns';
+import { encrypt, decrypt } from '../utils/encryption.js'; // <-- IMPORT ENCRYPTION UTILS
 
 interface EventDetails {
   summary: string;
@@ -20,7 +22,7 @@ class GoogleCalendarService {
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      process.env.GOOGLE_REDIRECT_URI // Ensure this is a generic redirect URI if used server-side
     );
   }
 
@@ -37,16 +39,21 @@ class GoogleCalendarService {
       throw new AppError('Teacher not found or Google Calendar not connected', 404);
     }
 
+    // <-- DECRYPT the token before using it
+    const decryptedRefreshToken = decrypt(teacher.googleRefreshToken);
     this.oauth2Client.setCredentials({
-      refresh_token: teacher.googleRefreshToken
+      refresh_token: decryptedRefreshToken
     });
 
-    // Listen for token refresh
+    // Listen for token refresh events
     this.oauth2Client.on('tokens', async (tokens) => {
       if (tokens.refresh_token) {
+        console.log('New refresh token received, updating database...');
+        // <-- ENCRYPT the new token before saving
+        const encryptedRefreshToken = encrypt(tokens.refresh_token);
         await prisma.teacher.update({
           where: { id: teacherId },
-          data: { googleRefreshToken: tokens.refresh_token }
+          data: { googleRefreshToken: encryptedRefreshToken }
         });
       }
     });
@@ -80,7 +87,7 @@ class GoogleCalendarService {
           { method: 'email', minutes: 30 },
         ],
       },
-      colorId: '2', // Green color for classes
+      colorId: '2', // Green
     };
 
     try {
@@ -89,10 +96,9 @@ class GoogleCalendarService {
         requestBody: event,
         sendNotifications: true,
       });
-
       return response.data.id!;
     } catch (error: any) {
-      console.error('Google Calendar API Error:', error);
+      console.error('Google Calendar API Error:', error.response?.data || error.message);
       throw new AppError(`Failed to create calendar event: ${error.message}`, 500);
     }
   }
@@ -103,34 +109,28 @@ class GoogleCalendarService {
   async updateCalendarEvent(
     teacherId: string,
     eventId: string,
-    eventDetails: EventDetails
+    eventDetails: Partial<EventDetails>
   ): Promise<void> {
     const calendar = await this.getCalendarClient(teacherId);
-
-    const event = {
-      summary: eventDetails.summary,
-      description: eventDetails.description || '',
-      location: eventDetails.location || '',
-      start: {
-        dateTime: eventDetails.startDateTime.toISOString(),
-        timeZone: 'Asia/Kolkata',
-      },
-      end: {
-        dateTime: eventDetails.endDateTime.toISOString(),
-        timeZone: 'Asia/Kolkata',
-      },
-      attendees: eventDetails.attendees?.map(email => ({ email })) || [],
+    
+    const eventPatch = {
+        ...(eventDetails.summary && { summary: eventDetails.summary }),
+        ...(eventDetails.description && { description: eventDetails.description }),
+        ...(eventDetails.location && { location: eventDetails.location }),
+        ...(eventDetails.startDateTime && { start: { dateTime: eventDetails.startDateTime.toISOString(), timeZone: 'Asia/Kolkata' } }),
+        ...(eventDetails.endDateTime && { end: { dateTime: eventDetails.endDateTime.toISOString(), timeZone: 'Asia/Kolkata' } }),
+        ...(eventDetails.attendees && { attendees: eventDetails.attendees.map(email => ({ email })) }),
     };
 
     try {
-      await calendar.events.update({
+      await calendar.events.patch({
         calendarId: 'primary',
         eventId: eventId,
-        requestBody: event,
+        requestBody: eventPatch,
         sendNotifications: true,
       });
     } catch (error: any) {
-      console.error('Google Calendar API Error:', error);
+      console.error('Google Calendar API Error:', error.response?.data || error.message);
       throw new AppError(`Failed to update calendar event: ${error.message}`, 500);
     }
   }
@@ -148,7 +148,12 @@ class GoogleCalendarService {
         sendNotifications: true,
       });
     } catch (error: any) {
-      console.error('Google Calendar API Error:', error);
+       // If event is already deleted (410 Gone), ignore the error.
+       if (error.code === 410) {
+        console.warn(`Event ${eventId} was already deleted from Google Calendar.`);
+        return;
+      }
+      console.error('Google Calendar API Error:', error.response?.data || error.message);
       throw new AppError(`Failed to delete calendar event: ${error.message}`, 500);
     }
   }
@@ -174,24 +179,23 @@ class GoogleCalendarService {
       });
 
       const conflictingEvents = response.data.items?.filter(event => {
-        // Exclude the event being updated
+        // Exclude the event being updated/rescheduled
         if (excludeEventId && event.id === excludeEventId) {
           return false;
         }
-        
-        // Check for time conflicts
-        const eventStart = new Date(event.start?.dateTime || event.start?.date!);
-        const eventEnd = new Date(event.end?.dateTime || event.end?.date!);
-        
-        return (
-          (startDateTime < eventEnd && endDateTime > eventStart) ||
-          (eventStart < endDateTime && eventEnd > startDateTime)
-        );
+        // Exclude events where the user has declined
+        if (event.attendees) {
+            const self = event.attendees.find(a => a.self);
+            if (self && self.responseStatus === 'declined') {
+                return false;
+            }
+        }
+        return true;
       });
 
       return !conflictingEvents || conflictingEvents.length === 0;
     } catch (error: any) {
-      console.error('Google Calendar API Error:', error);
+      console.error('Google Calendar API Error:', error.response?.data || error.message);
       throw new AppError(`Failed to check calendar availability: ${error.message}`, 500);
     }
   }
