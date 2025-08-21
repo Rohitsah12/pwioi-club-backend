@@ -467,3 +467,47 @@ export const updateExam = catchAsync(async (req: Request, res: Response) => {
 
   res.status(200).json(response);
 })
+
+
+export const deleteExam=catchAsync(async (req:Request,res:Response)=>{
+  const {examId}=req.params;
+  if(!examId){
+    throw new AppError("Exam Id Requires",400)
+  }
+  const existingExam = await prisma.exam.findUnique({
+    where: { id: examId },
+    select: {
+      id: true,
+      name: true,
+      exam_type: true,
+      exam_date: true
+    }
+  });
+
+  if (!existingExam) {
+    throw new AppError("Exam not found", 404);
+  }
+
+  const currentDate = new Date();
+  const examDate = new Date(existingExam.exam_date);
+
+  if (examDate < currentDate) {
+    throw new AppError("Cannot delete exam. This exam is already over.", 409);
+  }
+
+  const deletedExam = await prisma.exam.delete({
+    where: { id: examId }
+  });
+  const response = {
+    success: true,
+    message: "Exam deleted successfully",
+    data: {
+      id: deletedExam.id,
+      name: deletedExam.name,
+      exam_type: deletedExam.exam_type,
+      exam_date: deletedExam.exam_date
+    }
+  };
+
+  res.status(200).json(response);  
+})
