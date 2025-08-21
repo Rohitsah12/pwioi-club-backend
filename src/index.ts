@@ -27,6 +27,7 @@ import teacherCourseRoutes from "./routes/teacherCourse.routes.js";
 import teacherAttendanceRoutes from "./routes/teacherAttendance.routes.js";
 import roomRoutes from "./routes/room.routes.js";
 import classRoutes from "./routes/class.routes.js";
+import policyRoutes from "./routes/policy.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -63,6 +64,7 @@ app.use("/api/teacher-courses",teacherCourseRoutes)
 app.use("/api/teacher-attendance",teacherAttendanceRoutes)
 app.use("/api/rooms",roomRoutes)
 app.use("/api/class",classRoutes)
+app.use("/api/policy",policyRoutes)
 
 
 app.get("/health", (req, res) => {
