@@ -35,17 +35,17 @@ export enum AuthorRole {
   STUDENT = 'STUDENT'
 }
 
-export interface CreatePostRequest {
-  content?: string;
-  media?: MediaInput[];
-}
-
 export interface MediaInput {
   type: string;
   mime_type: string;
-  storage_url: string;
-  thumbnail_url?: string;
-  duration?: string;
+  s3_key: string;           // Changed from storage_url to s3_key
+  thumbnail_url?: string | null;  // matches your Prisma model
+  duration?: string | null;
+}
+
+export interface CreatePostRequest {
+  content?: string;
+  media?: MediaInput[];
 }
 
 export interface UpdatePostRequest {
