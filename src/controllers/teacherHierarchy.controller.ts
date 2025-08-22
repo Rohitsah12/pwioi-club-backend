@@ -184,8 +184,14 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
 
   // Process each subject and build hierarchy
   subjects.forEach(subject => {
-    const school = subject.semester.division!.batch.school;
-    const batch = subject.semester.division!.batch;
+    // Check if all required nested relations exist
+    if (!subject.semester?.division?.batch?.school) {
+      console.warn(`Skipping subject ${subject.id} due to incomplete hierarchy`);
+      return;
+    }
+
+    const school = subject.semester.division.batch.school;
+    const batch = subject.semester.division.batch;
     const division = subject.semester.division;
     const semester = subject.semester;
 
@@ -235,22 +241,26 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
         number: semester.number,
         start_date: semester.start_date,
         end_date: semester.end_date,
-        is_current: new Date() >= semester.start_date && new Date() <= semester.end_date!,
+        is_current: semester.end_date ? 
+          (new Date() >= semester.start_date && new Date() <= semester.end_date) : 
+          (new Date() >= semester.start_date),
         subjects: [],
-        total_subjects: 0
+        total_subjects: 0,
+        division_id: division.id
       });
     }
     semestersMap.get(semester.id).subjects.push(subjectDetail);
     semestersMap.get(semester.id).total_subjects++;
 
     // Initialize or update division
-    if (!divisionsMap.has(division!.id)) {
-      divisionsMap.set(division!.id, {
-        id: division!.id,
-        code: division!.code,
-        total_students: division!.students.length,
+    if (!divisionsMap.has(division.id)) {
+      divisionsMap.set(division.id, {
+        id: division.id,
+        code: division.code,
+        total_students: division.students.length,
         semesters: [],
-        total_semesters: 0
+        total_semesters: 0,
+        batch_id: batch.id
       });
     }
 
@@ -259,8 +269,12 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
       batchesMap.set(batch.id, {
         id: batch.id,
         name: batch.name,
+       start_year: parseInt(batch.name.split('-')[0] || '') || new Date().getFullYear(),
+        end_year: parseInt(batch.name.split('-')[1] || '') || new Date().getFullYear() + 4,
+        is_active: true, // You might want to determine this based on some logic
         divisions: [],
-        total_divisions: 0
+        total_divisions: 0,
+        school_id: school.id
       });
     }
 
@@ -269,6 +283,7 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
       schoolsMap.set(school.id, {
         id: school.id,
         name: school.name,
+        code: school.name, // Using name as code since code field doesn't exist in schema
         batches: [],
         total_batches: 0
       });
@@ -279,7 +294,7 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
   const divisionsArray = Array.from(divisionsMap.values());
   divisionsArray.forEach(division => {
     division.semesters = Array.from(semestersMap.values())
-      .filter(semester => subjects.some(s => s.semester.division_id === division.id && s.semester.id === semester.id))
+      .filter(semester => semester.division_id === division.id)
       .sort((a, b) => a.number - b.number);
     division.total_semesters = division.semesters.length;
   });
@@ -287,7 +302,7 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
   const batchesArray = Array.from(batchesMap.values());
   batchesArray.forEach(batch => {
     batch.divisions = divisionsArray
-      .filter(division => subjects.some(s => s.semester.division!.batch_id === batch.id && s.semester.division_id === division.id))
+      .filter(division => division.batch_id === batch.id)
       .sort((a, b) => a.code.localeCompare(b.code));
     batch.total_divisions = batch.divisions.length;
   });
@@ -295,7 +310,7 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
   const schoolsArray = Array.from(schoolsMap.values());
   schoolsArray.forEach(school => {
     school.batches = batchesArray
-      .filter(batch => subjects.some(s => s.semester.division!.batch.school_id === school.id && s.semester.division!.batch_id === batch.id))
+      .filter(batch => batch.school_id === school.id)
       .sort((a, b) => b.start_year - a.start_year); // Latest first
     school.total_batches = school.batches.length;
   });
