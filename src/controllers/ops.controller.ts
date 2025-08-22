@@ -1,5 +1,3 @@
-// src/controllers/ops.controller.ts
-
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prisma.js";
@@ -15,13 +13,7 @@ const addOpsSchema = z.object({
   linkedin: z.string().url("LinkedIn must be a valid URL").optional(),
 });
 
-const updateOpsSchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
-  email: z.string().email("A valid email is required").optional(),
-  phone: z.string().min(1, "Phone number is required").optional(),
-  designation: z.string().optional(),
-  linkedin: z.string().url("LinkedIn must be a valid URL").optional(),
-});
+const updateOpsSchema = addOpsSchema.partial();
 
 // Convert update object into Prisma-compatible input
 const toPrismaUpdateInput = (data: z.infer<typeof updateOpsSchema>) => {
@@ -34,6 +26,19 @@ const toPrismaUpdateInput = (data: z.infer<typeof updateOpsSchema>) => {
   return result;
 };
 
+// Safe select object to exclude sensitive fields
+const safeAdminSelect = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  linkedin: true,
+  designation: true,
+  createdAt: true,
+  updatedAt: true,
+  role: { select: { role: true } },
+};
+
 export const AddOps = catchAsync(async (req: Request, res: Response) => {
   const validation = addOpsSchema.safeParse(req.body);
   if (!validation.success) {
@@ -42,9 +47,7 @@ export const AddOps = catchAsync(async (req: Request, res: Response) => {
   const opsData = validation.data;
 
   const existingAdmin = await prisma.admin.findFirst({
-    where: {
-      OR: [{ email: opsData.email }, { phone: opsData.phone }],
-    },
+    where: { OR: [{ email: opsData.email }, { phone: opsData.phone }] },
   });
 
   if (existingAdmin) {
@@ -59,14 +62,10 @@ export const AddOps = catchAsync(async (req: Request, res: Response) => {
 
   const newOpsMember = await prisma.admin.create({
     data: {
-      name: opsData.name,
-      email: opsData.email,
-      phone: opsData.phone,
-      designation: opsData.designation,
-      linkedin: opsData.linkedin,
+      ...opsData,
       role_id: opsRole.id,
     } as any,
-    include: { role: true },
+    select: safeAdminSelect,
   });
 
   res.status(201).json({
@@ -79,7 +78,7 @@ export const AddOps = catchAsync(async (req: Request, res: Response) => {
 export const getAllOps = catchAsync(async (req: Request, res: Response) => {
   const opsMembers = await prisma.admin.findMany({
     where: { role: { role: RoleType.OPS } },
-    include: { role: true },
+    select: safeAdminSelect,
     orderBy: { createdAt: "desc" },
   });
 
@@ -92,29 +91,29 @@ export const getAllOps = catchAsync(async (req: Request, res: Response) => {
 
 export const getOps = catchAsync(async (req: Request, res: Response) => {
   const { opsId } = req.params;
-
-  if (!opsId) {
-    throw new AppError("Ops ID is required", 400);
-  }
+  if (!opsId) throw new AppError("Ops ID is required", 400);
 
   const opsMember = await prisma.admin.findFirst({
     where: { id: opsId, role: { role: RoleType.OPS } },
-    include: {
-      role: true,
+    select: {
+      ...safeAdminSelect,
       behaviours: {
         orderBy: { createdAt: "desc" },
         take: 10,
-        include: {
+        select: {
+          id: true,
+          action: true,
+          description: true,
+          createdAt: true,
           student: {
             select: { id: true, name: true, enrollment_id: true },
           },
         },
       },
       clubOfficials: {
-        include: {
-          club: {
-            select: { id: true, name: true, category: true },
-          },
+        select: {
+          id: true,
+          club: { select: { id: true, name: true, category: true } },
         },
       },
     },
@@ -124,33 +123,22 @@ export const getOps = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(`Ops team member with ID ${opsId} not found`, 404);
   }
 
-  res.status(200).json({
-    success: true,
-    data: opsMember,
-  });
+  res.status(200).json({ success: true, data: opsMember });
 });
 
 export const updateOps = catchAsync(async (req: Request, res: Response) => {
   const { opsId } = req.params;
   const validation = updateOpsSchema.safeParse(req.body);
 
-  if (!opsId) {
-    throw new AppError("Ops ID is required", 400);
-  }
-
-  if (!validation.success) {
-    throw new AppError(`Validation failed: ${validation.error.message}`, 400);
-  }
+  if (!opsId) throw new AppError("Ops ID is required", 400);
+  if (!validation.success) throw new AppError(`Validation failed: ${validation.error.message}`, 400);
 
   const updateData = validation.data;
 
   const existingOps = await prisma.admin.findFirst({
     where: { id: opsId, role: { role: RoleType.OPS } },
   });
-
-  if (!existingOps) {
-    throw new AppError(`Ops team member with ID ${opsId} not found`, 404);
-  }
+  if (!existingOps) throw new AppError(`Ops team member with ID ${opsId} not found`, 404);
 
   if (updateData.email || updateData.phone) {
     const conflictConditions: any[] = [];
@@ -160,7 +148,6 @@ export const updateOps = catchAsync(async (req: Request, res: Response) => {
     const existingAdmin = await prisma.admin.findFirst({
       where: { AND: [{ id: { not: opsId } }, { OR: conflictConditions }] },
     });
-
     if (existingAdmin) {
       throw new AppError("An admin with this email or phone number already exists.", 409);
     }
@@ -169,7 +156,7 @@ export const updateOps = catchAsync(async (req: Request, res: Response) => {
   const updatedOpsMember = await prisma.admin.update({
     where: { id: opsId },
     data: toPrismaUpdateInput(updateData),
-    include: { role: true },
+    select: safeAdminSelect,
   });
 
   res.status(200).json({
@@ -181,18 +168,12 @@ export const updateOps = catchAsync(async (req: Request, res: Response) => {
 
 export const deleteOps = catchAsync(async (req: Request, res: Response) => {
   const { opsId } = req.params;
-
-  if (!opsId) {
-    throw new AppError("Ops ID is required", 400);
-  }
+  if (!opsId) throw new AppError("Ops ID is required", 400);
 
   const existingOps = await prisma.admin.findFirst({
     where: { id: opsId, role: { role: RoleType.OPS } },
   });
-
-  if (!existingOps) {
-    throw new AppError(`Ops team member with ID ${opsId} not found`, 404);
-  }
+  if (!existingOps) throw new AppError(`Ops team member with ID ${opsId} not found`, 404);
 
   await prisma.admin.delete({ where: { id: opsId } });
 

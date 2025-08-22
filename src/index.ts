@@ -32,6 +32,7 @@ import jobRoutes from "./routes/job.routes.js";
 import eventRoutes from "./routes/event.routes.js";
 import mentorRoutes from "./routes/mentor.routes.js";
 import opsRoutes from "./routes/ops.routes.js";
+import batchOpsROutes from "./routes/batchops.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -47,7 +48,7 @@ app.use(cookieParser());
 app.use('/api/auth', authRouter)
 app.use('/api/superadmin', superadminrouter)
 app.use("/api/ops",opsRoutes)
-// app.use("/api/batch-ops",batchopsRoutes)
+app.use("/api/batch-ops",batchOpsROutes)
 app.use('/api/admin',adminRouter)
 app.use('/api/center',centerRouter)
 app.use('/api/post',engagementRouter)
