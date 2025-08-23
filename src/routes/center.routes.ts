@@ -4,13 +4,13 @@ import { assignCenterHeads, createCenter, getAllCenters, getAllCentersByAdmin } 
 
 const centerRouter=Router();
 
-centerRouter.post('/create',authenticateJwt,requireRoles('SUPER_ADMIN'),createCenter)
+centerRouter.post('/create',authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),createCenter)
 
-centerRouter.put("/:code/assign-heads", authenticateJwt, requireRoles("SUPER_ADMIN"), assignCenterHeads);
+centerRouter.put("/:code/assign-heads", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), assignCenterHeads);
 
-centerRouter.get("/all",authenticateJwt,requireRoles('SUPER_ADMIN'),getAllCenters)
+centerRouter.get("/all",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getAllCenters)
 
-centerRouter.get("/:adminId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN"),getAllCentersByAdmin)
+centerRouter.get("/:adminId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getAllCentersByAdmin)
 
 
 export default centerRouter;

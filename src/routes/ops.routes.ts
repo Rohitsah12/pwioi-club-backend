@@ -5,11 +5,11 @@ import { AddOps, deleteOps, getAllOps, getOps, updateOps } from "../controllers/
 const opsRoutes=Router();
 
 
-opsRoutes.post("",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),AddOps)
-opsRoutes.get("/All",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),getAllOps)
-opsRoutes.get("/:opsId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),getOps)
-opsRoutes.put("/:opsId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),updateOps)
-opsRoutes.delete("/:opsId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),deleteOps)
+opsRoutes.post("",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),AddOps)
+opsRoutes.get("/All",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getAllOps)
+opsRoutes.get("/:opsId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getOps)
+opsRoutes.put("/:opsId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),updateOps)
+opsRoutes.delete("/:opsId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),deleteOps)
 
 
 

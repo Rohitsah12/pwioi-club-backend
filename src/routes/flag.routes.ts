@@ -9,7 +9,7 @@ import {
 const flagRoutes = Router();
 
 flagRoutes.post('/', authenticateJwt, flagPost);
-flagRoutes.get('/', authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"), getFlags);
-flagRoutes.patch('/:flagId/review', authenticateJwt, requireRoles("ADMIN","SUPER_ADMIN"),reviewFlag);
+flagRoutes.get('/', authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getFlags);
+flagRoutes.patch('/:flagId/review', authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),reviewFlag);
 
 export default flagRoutes;

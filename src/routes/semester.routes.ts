@@ -5,10 +5,10 @@ import { createSemester, deleteSemester, getAllSemester, getSemesterDetails, upd
 const semesterRoutes=Router();
 
 
-semesterRoutes.post("/",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),createSemester);
+semesterRoutes.post("/",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),createSemester);
 semesterRoutes.get("/all/:divisionId",authenticateJwt,getAllSemester);
-semesterRoutes.patch("/:semesterId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),updateSemester)
-semesterRoutes.delete("/:semesterId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),deleteSemester)
+semesterRoutes.patch("/:semesterId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),updateSemester)
+semesterRoutes.delete("/:semesterId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),deleteSemester)
 semesterRoutes.get("/:semesterId",authenticateJwt,getSemesterDetails)
 
 

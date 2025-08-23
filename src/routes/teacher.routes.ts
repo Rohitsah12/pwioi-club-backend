@@ -35,8 +35,8 @@ const teacherRoutes = express.Router();
 const upload = multer();
 
 
-teacherRoutes.post("/bulk", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), bulkCreateTeachers);
-teacherRoutes.post("/upload", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), upload.single("file"), createTeachersFromExcel);
+teacherRoutes.post("/bulk", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), bulkCreateTeachers);
+teacherRoutes.post("/upload", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), upload.single("file"), createTeachersFromExcel);
 teacherRoutes.get("/teaching-details",authenticateJwt,requireRoles("TEACHER", "ASSISTANT_TEACHER"),getTeacherHierarchy);
 
 teacherRoutes.get("/counts", authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER"), getTeacherDivisionAndStudentCounts);
@@ -65,9 +65,9 @@ teacherRoutes.get("/me/active-subject-attendance", authenticateJwt, requireRoles
 teacherRoutes.get("/assistant-teachers", authenticateJwt, getAssistantTeachers);
 teacherRoutes.get("/batches", authenticateJwt, getCenterBatches);
 
-teacherRoutes.get("/center/:centerId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getTeachersByCenterId);
-teacherRoutes.get("/school/:schoolId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getTeachersBySchoolId);
+teacherRoutes.get("/center/:centerId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getTeachersByCenterId);
+teacherRoutes.get("/school/:schoolId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getTeachersBySchoolId);
 teacherRoutes.get("/:teacherId", authenticateJwt, getTeacherById);
-teacherRoutes.delete("/:teacherId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), permanentlyDeleteTeacher);
+teacherRoutes.delete("/:teacherId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), permanentlyDeleteTeacher);
 
 export default teacherRoutes;

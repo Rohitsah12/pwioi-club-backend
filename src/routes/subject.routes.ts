@@ -5,14 +5,14 @@ import { createSubject, deleteSubject, getAllSubjects, getStudentsForSubject, ge
 const subjectRoutes=Router();
 
 
-subjectRoutes.post("", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), createSubject);
-subjectRoutes.get("", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getAllSubjects);
-subjectRoutes.get("/statistics", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getSubjectStatistics);
-subjectRoutes.get("/:subjectId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getSubjectById);
-subjectRoutes.patch("/:subjectId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), updateSubject);
-subjectRoutes.delete("/:subjectId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), deleteSubject);
-subjectRoutes.get("/semesters/:semesterId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getSubjectsBySemester);
-subjectRoutes.get("/teachers/:teacherId", authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN"), getSubjectsByTeacher);
+subjectRoutes.post("", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), createSubject);
+subjectRoutes.get("", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getAllSubjects);
+subjectRoutes.get("/statistics", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getSubjectStatistics);
+subjectRoutes.get("/:subjectId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getSubjectById);
+subjectRoutes.patch("/:subjectId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), updateSubject);
+subjectRoutes.delete("/:subjectId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), deleteSubject);
+subjectRoutes.get("/semesters/:semesterId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getSubjectsBySemester);
+subjectRoutes.get("/teachers/:teacherId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getSubjectsByTeacher);
 
 subjectRoutes.get('/:subjectId/students',authenticateJwt, requireRoles("TEACHER",), getStudentsForSubject);
 export default subjectRoutes;

@@ -5,11 +5,11 @@ import { AddBatchOps, deleteBatchOps, getALLBatchOps, getBatchOps, UpdateBatchOp
 const batchOpsROutes=Router()
 
 
-batchOpsROutes.post("",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),AddBatchOps)
-batchOpsROutes.get("/All",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),getALLBatchOps)
-batchOpsROutes.get("/:batchOpsId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),getBatchOps)
-batchOpsROutes.put("/:batchOpsId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),UpdateBatchOps)
-batchOpsROutes.delete("/:batchOpsId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),deleteBatchOps)
+batchOpsROutes.post("",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),AddBatchOps)
+batchOpsROutes.get("/All",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getALLBatchOps)
+batchOpsROutes.get("/:batchOpsId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getBatchOps)
+batchOpsROutes.put("/:batchOpsId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),UpdateBatchOps)
+batchOpsROutes.delete("/:batchOpsId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),deleteBatchOps)
 
 
 

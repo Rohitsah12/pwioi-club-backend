@@ -8,6 +8,6 @@ engagementRouter.get('/get', authenticateJwt, getPosts);
 engagementRouter.get('/get/:postId', authenticateJwt, getPostById);
 engagementRouter.put('/update/:postId', authenticateJwt, updatePost);
 engagementRouter.delete('/delete/:postId', authenticateJwt, deletePost);
-engagementRouter.get('/post-stats',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","OPS"),getPostStats)
+engagementRouter.get('/post-stats',authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getPostStats)
 
 export default engagementRouter;
