@@ -410,10 +410,11 @@ model Center {
   cohorts       Cohort[]
   divisions     Division[]
   policies      Policy[]
-  rooms         Room[]     // Add this line
+  rooms         Room[]     
   schools       School[]
   students      Student[]
   teachers      Teacher[]
+  clubs         Club[]
 
   @@index([business_head], map: "center_business_head_idx")
   @@index([academic_head], map: "center_academic_head_idx")
@@ -946,10 +947,12 @@ model Club {
   name          String
   description   String?
   leader_id     String
+   center_id     String
   established   DateTime?
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @default(now()) @map("updated_at")
   leader        Student        @relation("ClubLeader", fields: [leader_id], references: [id], onDelete: Cascade)
+  center        Center         @relation(fields: [center_id], references: [id], onDelete: Cascade)
   coreTeams     ClubCoreTeam[]
   clubOfficials ClubOfficial[]
 
