@@ -460,6 +460,7 @@ model School {
   center         Center          @relation(fields: [center_id], references: [id], onDelete: Cascade)
   students       Student[]
   teacherSchools TeacherSchool[]
+  cohorts         Cohort[] 
 
   @@unique([center_id, name], map: "unique_school_name_per_center")
   @@index([center_id], map: "school_center_id_idx")
@@ -698,15 +699,18 @@ model Cohort {
   id             String          @id @default(dbgenerated("gen_random_uuid()"))
   name           String
   center_id      String
+  school_id       String  
   start_date     DateTime
   end_date       DateTime?
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @default(now()) @map("updated_at")
   center         Center          @relation(fields: [center_id], references: [id], onDelete: Cascade)
+  school          School          @relation(fields: [school_id], references: [id], onDelete: Cascade)
   students       Student[]
   teacherCohorts TeacherCohort[]
 
   @@index([center_id], map: "cohort_center_id_idx")
+  @@index([school_id], map: "cohort_school_id_idx")
 }
 
 model Division {
