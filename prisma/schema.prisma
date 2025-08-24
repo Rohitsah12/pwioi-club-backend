@@ -32,6 +32,8 @@ model Class {
   googleEventId  String
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @default(now()) @map("updated_at")
+  sub_topic_id String?
+  subTopic     CprSubTopic? @relation(fields: [sub_topic_id], references: [id], onDelete: SetNull) // On sub-topic deletion, don't delete the class
   attendances    Attendance[]
   division       Division     @relation(fields: [division_id], references: [id], onDelete: Cascade)
   room           Room         @relation(fields: [room_id], references: [id], onDelete: Cascade)
@@ -806,6 +808,7 @@ model Subject {
   examMarks   StudentExamMarks[]
   semester    Semester           @relation(fields: [semester_id], references: [id], onDelete: Cascade)
   teacher     Teacher            @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  cprModules CprModule[]         
 
   @@index([semester_id], map: "subject_semester_id_idx")
   @@index([teacher_id], map: "subject_teacher_id_idx")
@@ -1106,6 +1109,68 @@ model ClubCoreTeam {
   @@index([club_id], map: "core_team_club_id_idx")
 }
 
+enum CPRStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model CprModule {
+  id         String     @id @default(dbgenerated("gen_random_uuid()"))
+  name       String
+  order      Int
+  subject_id String
+
+  subject    Subject    @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  topics     CprTopic[]
+
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@unique([subject_id, order])
+  @@index([subject_id])
+}
+
+
+model CprTopic {
+  id         String        @id @default(dbgenerated("gen_random_uuid()"))
+  name       String
+  order      Int
+  module_id  String
+
+  module     CprModule     @relation(fields: [module_id], references: [id], onDelete: Cascade)
+  subTopics  CprSubTopic[]
+
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@unique([module_id, order])
+  @@index([module_id])
+}
+
+model CprSubTopic {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()"))
+  name               String
+  order              Int
+  topic_id           String
+  lecture_count      Int        @default(1)
+
+  // Tracking Fields
+  status             CPRStatus  @default(PENDING)
+  planned_start_date DateTime?
+  planned_end_date   DateTime?
+  actual_start_date  DateTime?
+  actual_end_date    DateTime?
+
+  topic              CprTopic   @relation(fields: [topic_id], references: [id], onDelete: Cascade)
+  classes            Class[]
+
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  
+  @@unique([topic_id, order])
+  @@index([topic_id])
+}
 model ChangeLog {
   id              String   @id @default(dbgenerated("gen_random_uuid()"))
   entity_name     String
