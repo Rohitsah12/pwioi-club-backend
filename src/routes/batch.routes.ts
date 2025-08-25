@@ -8,10 +8,10 @@ const batchRoutes=Router();
 batchRoutes.post("/create",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),createBatch)
 batchRoutes.get("/:schoolId",authenticateJwt,getAllBatchesSchoolwise)
 
-batchRoutes.delete("/:batchId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),deleteBatch)
+batchRoutes.delete("/:batchId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),deleteBatch)
 
 batchRoutes.get("/get/:batchId",authenticateJwt,getBatchDetails)
 
-batchRoutes.patch("/:batchId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),updateBatch)
+batchRoutes.patch("/:batchId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),updateBatch)
 
 export default batchRoutes

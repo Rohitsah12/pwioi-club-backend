@@ -5,13 +5,13 @@ import { createSchools, deleteSchool, getAllSchools, getSchoolStats, updateSchoo
 const schoolRoutes=Router();
 
 
-schoolRoutes.post("/create",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),createSchools)
-schoolRoutes.get("/:centerId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","TEACHER"),getAllSchools)
-schoolRoutes.delete("/:schoolId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),deleteSchool)
+schoolRoutes.post("/create",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),createSchools)
+schoolRoutes.get("/:centerId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","TEACHER","BATCHOPS","OPS"),getAllSchools)
+schoolRoutes.delete("/:schoolId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),deleteSchool)
 
-schoolRoutes.get("/school-stats/:schoolId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),getSchoolStats)
+schoolRoutes.get("/school-stats/:schoolId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),getSchoolStats)
 
-schoolRoutes.patch("/:schoolId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN"),updateSchool)
+schoolRoutes.patch("/:schoolId",authenticateJwt,requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"),updateSchool)
 
 
 export default schoolRoutes;

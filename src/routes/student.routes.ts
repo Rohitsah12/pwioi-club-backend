@@ -13,13 +13,13 @@ const upload = multer();
 
 const studentRoutes = express.Router();
 
-studentRoutes.post("/bulk",authenticateJwt,requireRoles("ADMIN", "SUPER_ADMIN"),bulkCreateStudents);
+studentRoutes.post("/bulk",authenticateJwt,requireRoles("ADMIN", "SUPER_ADMIN","OPS","BATCHOPS"),bulkCreateStudents);
 
-studentRoutes.post("/bulk-excel",authenticateJwt,requireRoles("ADMIN", "SUPER_ADMIN"),upload.single("file"),createStudentsFromExcel);
+studentRoutes.post("/bulk-excel",authenticateJwt,requireRoles("ADMIN", "SUPER_ADMIN","OPS","BATCHOPS"),upload.single("file"),createStudentsFromExcel);
 
-studentRoutes.patch("/:studentId/deactivate",authenticateJwt,requireRoles("ADMIN", "SUPER_ADMIN"),softDeleteStudent);
+studentRoutes.patch("/:studentId/deactivate",authenticateJwt,requireRoles("ADMIN", "SUPER_ADMIN","OPS","BATCHOPS"),softDeleteStudent);
 
-studentRoutes.delete("/:studentId/permanent",authenticateJwt,requireRoles("SUPER_ADMIN"),permanentlyDeleteStudent);
+studentRoutes.delete("/:studentId/permanent",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","OPS","BATCHOPS"),permanentlyDeleteStudent);
 
 
 export default studentRoutes;

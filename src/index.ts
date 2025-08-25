@@ -33,6 +33,8 @@ import eventRoutes from "./routes/event.routes.js";
 import mentorRoutes from "./routes/mentor.routes.js";
 import opsRoutes from "./routes/ops.routes.js";
 import batchOpsROutes from "./routes/batchops.routes.js";
+import cohortRoutes from "./routes/cohort.routes.js";
+import clubRoutes from "./routes/club.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -75,6 +77,8 @@ app.use("/api/policy",policyRoutes)
 app.use("/api/job",jobRoutes)
 app.use("/api/event",eventRoutes)
 app.use("/api/mentor",mentorRoutes)
+app.use("/api/cohort",cohortRoutes)
+app.use("/api/club",clubRoutes)
 
 
 app.get("/health", (req, res) => {
