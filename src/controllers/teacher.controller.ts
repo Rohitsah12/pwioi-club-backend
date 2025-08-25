@@ -41,7 +41,6 @@ interface PublicTeacherData {
   createdAt: Date;
 }
 
-// --- Helper Functions ---
 
 async function authorizeTeacherManagement(centerId: string, role: UserRole, adminId: string): Promise<void> {
   if (role === 'SUPER_ADMIN' || role === 'ADMIN') return;
