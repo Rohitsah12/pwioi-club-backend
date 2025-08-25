@@ -9,12 +9,14 @@ import { z } from "zod";
 import { getActiveSubjectsWithAttendance } from "../service/getActiveSubjectsAttendanceService.js";
 
 const MAX_BATCH_SIZE = 1000;
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+// --- Interfaces ---
 
 interface TeacherInput {
   name: string;
   email: string;
   phone: string;
+  pwId?: string;
   role: TeacherRole;
   gender: Gender;
   designation?: string;
@@ -22,19 +24,9 @@ interface TeacherInput {
 
 interface ValidationError {
   row: number;
-  data: Omit<TeacherInput, 'gender' | 'role'> & { gender?: string; role?: string };
+  data: Partial<TeacherInput>;
   error: string;
   field?: string;
-}
-
-interface ProcessingResult {
-  success: boolean;
-  added_count: number;
-  total_processed: number;
-  validation_errors: number;
-  duplicate_errors: number;
-  errors: ValidationError[];
-  teachers: PublicTeacherData[];
 }
 
 interface PublicTeacherData {
@@ -42,21 +34,23 @@ interface PublicTeacherData {
   name: string;
   email: string;
   phone: string;
+  pwId: string | null;
   role: TeacherRole;
   gender: Gender;
   designation: string | null;
   createdAt: Date;
 }
 
+// --- Helper Functions ---
 
 async function authorizeTeacherManagement(centerId: string, role: UserRole, adminId: string): Promise<void> {
   if (role === 'SUPER_ADMIN' || role === 'ADMIN') return;
   throw new AppError("Your role is not permitted to manage teachers.", 403);
 }
 
-function validateTeacherData(teacher: any, row: number = 0): { isValid: boolean; errors: ValidationError[] } {
+function validateBaseTeacherData(teacher: any, row: number = 0): { isValid: boolean; errors: ValidationError[] } {
   const errors: ValidationError[] = [];
-  const sanitized = { name: teacher.name, email: teacher.email, phone: teacher.phone, role: teacher.role, gender: teacher.gender, designation: teacher.designation };
+  const sanitized = { name: teacher.name, email: teacher.email, phone: teacher.phone, pwId: teacher.pwId, role: teacher.role, gender: teacher.gender, designation: teacher.designation };
 
   if (!teacher.name || typeof teacher.name !== "string" || teacher.name.trim().length === 0) {
     errors.push({ row, data: sanitized, error: "Name is required", field: "name" });
@@ -66,6 +60,9 @@ function validateTeacherData(teacher: any, row: number = 0): { isValid: boolean;
   }
   if (!teacher.phone || typeof teacher.phone !== "string" || !/^\d{10,15}$/.test(String(teacher.phone))) {
     errors.push({ row, data: sanitized, error: "A valid phone number (10-15 digits) is required", field: "phone" });
+  }
+  if (teacher.pwId && typeof teacher.pwId !== "string") {
+    errors.push({ row, data: sanitized, error: "pwId must be a string", field: "pwId" });
   }
   if (!teacher.role || !Object.values(TeacherRole).includes(teacher.role)) {
     errors.push({ row, data: sanitized, error: "Role must be either TEACHER or ASSISTANT_TEACHER", field: "role" });
@@ -80,19 +77,16 @@ function validateTeacherData(teacher: any, row: number = 0): { isValid: boolean;
 async function checkTeacherDuplicates(teachers: TeacherInput[]): Promise<any[]> {
   const emails = teachers.map(t => t.email.toLowerCase());
   const phones = teachers.map(t => t.phone);
+  const pwIds = teachers.map(t => t.pwId).filter(Boolean) as string[];
 
   const existingTeachers = await prisma.teacher.findMany({
-    where: {
-      OR: [
-        { email: { in: emails } },
-        { phone: { in: phones } },
-      ],
-    },
-    select: { email: true, phone: true },
+    where: { OR: [{ email: { in: emails } }, { phone: { in: phones } }, { pwId: { in: pwIds } }] },
+    select: { email: true, phone: true, pwId: true },
   });
 
   const existingEmailSet = new Set(existingTeachers.map(t => t.email.toLowerCase()));
   const existingPhoneSet = new Set(existingTeachers.map(t => t.phone));
+  const existingPwIdSet = new Set(existingTeachers.map(t => t.pwId).filter(Boolean));
 
   const conflicts: any[] = [];
   teachers.forEach((teacher, index) => {
@@ -100,6 +94,8 @@ async function checkTeacherDuplicates(teachers: TeacherInput[]): Promise<any[]> 
       conflicts.push({ index, teacher, conflictType: 'email' });
     } else if (existingPhoneSet.has(teacher.phone)) {
       conflicts.push({ index, teacher, conflictType: 'phone' });
+    } else if (teacher.pwId && existingPwIdSet.has(teacher.pwId)) {
+      conflicts.push({ index, teacher, conflictType: 'pwId' });
     }
   });
   return conflicts;
@@ -107,321 +103,292 @@ async function checkTeacherDuplicates(teachers: TeacherInput[]): Promise<any[]> 
 
 function sanitizeTeacherData(teacher: any): PublicTeacherData {
   return {
-    id: teacher.id,
-    name: teacher.name,
-    email: teacher.email,
-    phone: teacher.phone,
-    role: teacher.role,
-    gender: teacher.gender,
-    designation: teacher.designation,
-    createdAt: teacher.createdAt,
+    id: teacher.id, name: teacher.name, email: teacher.email, phone: teacher.phone,
+    pwId: teacher.pwId, role: teacher.role, gender: teacher.gender,
+    designation: teacher.designation, createdAt: teacher.createdAt,
   };
 }
 
 
+// --- Controller Endpoints ---
+
+/**
+ * @description Bulk creates teachers from a JSON payload. Associates all teachers with the schools provided in the top-level schoolIds array.
+ */
 export const bulkCreateTeachers = catchAsync(async (req: Request, res: Response) => {
-  const { centerId, teachers } = req.body;
-  const { role, id } = req.user!;
+    const { centerId, schoolIds, teachers } = req.body;
+    const { role, id } = req.user!;
 
-  if (!centerId || !Array.isArray(teachers)) {
-    throw new AppError("centerId and teachers array are required", 400);
-  }
-  if (teachers.length > MAX_BATCH_SIZE) {
-    throw new AppError(`Cannot process more than ${MAX_BATCH_SIZE} teachers at once`, 400);
-  }
-
-  await authorizeTeacherManagement(centerId, role, id);
-
-  const validationErrors: ValidationError[] = [];
-  const validTeachers: TeacherInput[] = [];
-
-  teachers.forEach((teacher: any, idx: number) => {
-    const teacherInput: TeacherInput = {
-      name: teacher.name,
-      email: teacher.email,
-      phone: String(teacher.phone),
-      role: String(teacher.role).toUpperCase() as TeacherRole,
-      gender: String(teacher.gender).toUpperCase() as Gender,
-      designation: teacher.designation,
-    };
-    const { isValid, errors } = validateTeacherData(teacherInput, idx + 1);
-    if (!isValid) {
-      validationErrors.push(...errors);
-    } else {
-      validTeachers.push(teacherInput);
+    if (!centerId || !Array.isArray(schoolIds) || !Array.isArray(teachers)) {
+        throw new AppError("centerId, schoolIds array, and teachers array are required", 400);
     }
-  });
-
-  if (validTeachers.length === 0) {
-    return res.status(400).json({ success: false, added_count: 0, errors: validationErrors });
-  }
-
-  const existingConflicts = await checkTeacherDuplicates(validTeachers);
-  const duplicateErrors: ValidationError[] = existingConflicts.map(conflict => ({
-    row: conflict.index + 1,
-    data: conflict.teacher,
-    error: `A teacher with this ${conflict.conflictType} already exists.`,
-    field: conflict.conflictType,
-  }));
-
-  const teachersToCreate = validTeachers.filter((_, index) => !existingConflicts.some(c => c.index === index));
-
-  if (teachersToCreate.length === 0) {
-    return res.status(400).json({ success: false, added_count: 0, errors: [...validationErrors, ...duplicateErrors] });
-  }
-
-  await prisma.teacher.createMany({
-    data: teachersToCreate.map(teacher => ({ ...teacher, center_id: centerId })),
-    skipDuplicates: true,
-  });
-
-  const createdTeacherRecords = await prisma.teacher.findMany({
-    where: {
-      email: { in: teachersToCreate.map(t => t.email.toLowerCase()) }
+    if (schoolIds.length === 0) {
+        throw new AppError("The schoolIds array cannot be empty.", 400);
     }
-  });
+    if (teachers.length > MAX_BATCH_SIZE) {
+        throw new AppError(`Cannot process more than ${MAX_BATCH_SIZE} teachers at once`, 400);
+    }
 
-  res.status(201).json({
-    success: true,
-    added_count: createdTeacherRecords.length,
-    total_processed: teachers.length,
-    validation_errors: validationErrors.length,
-    duplicate_errors: duplicateErrors.length,
-    errors: [...validationErrors, ...duplicateErrors],
-    teachers: createdTeacherRecords.map(sanitizeTeacherData),
-  });
+    await authorizeTeacherManagement(centerId, role, id);
+
+    const centerSchools = await prisma.school.findMany({ where: { center_id: centerId }, select: { id: true } });
+    const validSchoolIdSet = new Set(centerSchools.map(s => s.id));
+    const invalidSchoolIds = schoolIds.filter(id => !validSchoolIdSet.has(id));
+
+    if (invalidSchoolIds.length > 0) {
+        throw new AppError(`Invalid or out-of-center schoolIds provided: ${invalidSchoolIds.join(', ')}`, 400);
+    }
+
+    const validationErrors: ValidationError[] = [];
+    const validTeachers: TeacherInput[] = [];
+
+    teachers.forEach((teacher: any, idx: number) => {
+        const { isValid, errors } = validateBaseTeacherData(teacher, idx + 1);
+        if (!isValid) {
+            validationErrors.push(...errors);
+        } else {
+            validTeachers.push({
+                name: teacher.name, email: teacher.email, phone: String(teacher.phone),
+                pwId: teacher.pwId, role: String(teacher.role).toUpperCase() as TeacherRole,
+                gender: String(teacher.gender).toUpperCase() as Gender,
+                designation: teacher.designation,
+            });
+        }
+    });
+
+    if (validTeachers.length === 0) {
+        return res.status(400).json({ success: false, added_count: 0, errors: validationErrors });
+    }
+
+    const existingConflicts = await checkTeacherDuplicates(validTeachers);
+    const duplicateErrors: ValidationError[] = existingConflicts.map(conflict => ({
+        row: conflict.index + 1, data: conflict.teacher,
+        error: `A teacher with this ${conflict.conflictType} already exists.`,
+        field: conflict.conflictType,
+    }));
+    
+    const uniqueTeacherInputs = validTeachers.filter((_, index) => !existingConflicts.some(c => c.index === index));
+
+    if (uniqueTeacherInputs.length === 0) {
+        return res.status(400).json({ success: false, added_count: 0, errors: [...validationErrors, ...duplicateErrors] });
+    }
+
+    let createdTeacherRecords: PublicTeacherData[] = [];
+    
+    try {
+        await prisma.$transaction(async (tx) => {
+            const teachersToCreate = uniqueTeacherInputs.map((teacherData) => ({
+                ...teacherData, center_id: centerId,
+            }));
+            await tx.teacher.createMany({ data: teachersToCreate });
+            const createdTeachers = await tx.teacher.findMany({
+                where: { email: { in: uniqueTeacherInputs.map(t => t.email) } }
+            });
+
+            const teacherSchoolLinks = createdTeachers.flatMap(teacher => 
+                schoolIds.map(schoolId => ({
+                    teacher_id: teacher.id, school_id: schoolId,
+                    specialisation: "General"
+                }))
+            );
+
+            if (teacherSchoolLinks.length > 0) {
+                await tx.teacherSchool.createMany({ data: teacherSchoolLinks });
+            }
+            createdTeacherRecords = createdTeachers.map(sanitizeTeacherData);
+        });
+
+        res.status(201).json({
+            success: true, added_count: createdTeacherRecords.length,
+            total_processed: teachers.length, validation_errors: validationErrors.length,
+            duplicate_errors: duplicateErrors.length, errors: [...validationErrors, ...duplicateErrors],
+            teachers: createdTeacherRecords,
+        });
+    } catch (error) {
+        console.error("Transaction failed:", error);
+        throw new AppError("Failed to create teachers due to an internal error.", 500);
+    }
 });
 
+
+/**
+ * @description Bulk creates teachers from an Excel file. Associates all teachers with the schools provided in the request body's schoolIds array.
+ */
 export const createTeachersFromExcel = catchAsync(async (req: Request, res: Response) => {
-  const { centerId } = req.body;
-  const { role, id } = req.user!;
-  const file = req.file;
+    const { centerId, schoolIds } = req.body;
+    const { role, id } = req.user!;
+    const file = req.file;
 
-  if (!centerId) throw new AppError("centerId is required", 400);
-  if (!file) throw new AppError("Excel file is required", 400);
+    if (!centerId || !schoolIds) throw new AppError("centerId and schoolIds are required in the request body", 400);
+    if (!file) throw new AppError("Excel file is required", 400);
 
-  await authorizeTeacherManagement(centerId, role, id);
-
-  const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) throw new AppError("Excel file contains no sheets", 400);
-
-  const worksheet = workbook.Sheets[sheetName];
-  if (!worksheet) throw new AppError(`Sheet "${sheetName}" not found in the file.`, 400);
-
-  const rawData = XLSX.utils.sheet_to_json(worksheet);
-
-  const REQUIRED_COLUMNS = ['name', 'email', 'phone', 'role', 'gender'];
-  if (rawData.length > 0) {
-    const firstRow = rawData[0] as any;
-    const missingColumns = REQUIRED_COLUMNS.filter(col => !(col in firstRow));
-    if (missingColumns.length > 0) {
-      throw new AppError(`Missing required columns: ${missingColumns.join(', ')}`, 400);
+    const schoolIdsArray = Array.isArray(schoolIds) ? schoolIds : [schoolIds];
+    if (schoolIdsArray.length === 0) {
+        throw new AppError("The schoolIds array cannot be empty.", 400);
     }
-  }
+    
+    await authorizeTeacherManagement(centerId, role, id);
 
-  const validationErrors: ValidationError[] = [];
-  const validTeachers: TeacherInput[] = [];
+    const centerSchools = await prisma.school.findMany({ where: { center_id: centerId }, select: { id: true } });
+    const validSchoolIdSet = new Set(centerSchools.map(s => s.id));
+    const invalidSchoolIds = schoolIdsArray.filter(id => !validSchoolIdSet.has(id));
 
-  rawData.forEach((row: any, idx: number) => {
-    const teacherInput: TeacherInput = {
-      name: row.name,
-      email: row.email,
-      phone: String(row.phone),
-      role: String(row.role).toUpperCase() as TeacherRole,
-      gender: String(row.gender).toUpperCase() as Gender,
-      designation: row.designation,
-    };
-    const { isValid, errors } = validateTeacherData(teacherInput, idx + 2);
-    if (!isValid) {
-      validationErrors.push(...errors);
-    } else {
-      validTeachers.push(teacherInput);
+    if (invalidSchoolIds.length > 0) {
+        throw new AppError(`Invalid or out-of-center schoolIds provided: ${invalidSchoolIds.join(', ')}`, 400);
     }
-  });
 
-  const existingConflicts = await checkTeacherDuplicates(validTeachers);
-  const duplicateErrors: ValidationError[] = existingConflicts.map(conflict => ({
-    row: conflict.index + 2,
-    data: conflict.teacher,
-    error: `A teacher with this ${conflict.conflictType} already exists.`,
-    field: conflict.conflictType,
-  }));
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) throw new AppError("Excel file contains no sheets", 400);
 
-  const teachersToCreate = validTeachers.filter((_, index) => !existingConflicts.some(c => c.index === index));
+    const worksheet = workbook.Sheets[sheetName];
+    const rawData = XLSX.utils.sheet_to_json(worksheet!);
 
-  if (teachersToCreate.length === 0) {
-    return res.status(400).json({ success: false, added_count: 0, errors: [...validationErrors, ...duplicateErrors] });
-  }
-
-  await prisma.teacher.createMany({
-    data: teachersToCreate.map(teacher => ({ ...teacher, center_id: centerId })),
-    skipDuplicates: true,
-  });
-
-  const createdTeacherRecords = await prisma.teacher.findMany({
-    where: {
-      email: { in: teachersToCreate.map(t => t.email.toLowerCase()) }
+    const REQUIRED_COLUMNS = ['name', 'email', 'phone', 'role', 'gender'];
+    if (rawData.length > 0) {
+        const missingColumns = REQUIRED_COLUMNS.filter(col => !(col in (rawData[0] as any)));
+        if (missingColumns.length > 0) {
+            throw new AppError(`Missing required columns in Excel: ${missingColumns.join(', ')}`, 400);
+        }
     }
-  });
 
-  res.status(201).json({
-    success: true,
-    added_count: createdTeacherRecords.length,
-    total_processed: rawData.length,
-    validation_errors: validationErrors.length,
-    duplicate_errors: duplicateErrors.length,
-    errors: [...validationErrors, ...duplicateErrors],
-    teachers: createdTeacherRecords.map(sanitizeTeacherData),
-  });
+    const validationErrors: ValidationError[] = [];
+    const validTeachers: TeacherInput[] = [];
+
+    rawData.forEach((row: any, idx: number) => {
+        const { isValid, errors } = validateBaseTeacherData(row, idx + 2);
+        if (!isValid) {
+            validationErrors.push(...errors);
+        } else {
+            validTeachers.push({
+                name: row.name, email: row.email, phone: String(row.phone),
+                pwId: row.pwId, role: String(row.role).toUpperCase() as TeacherRole,
+                gender: String(row.gender).toUpperCase() as Gender,
+                designation: row.designation,
+            });
+        }
+    });
+
+    if (validTeachers.length === 0) {
+        return res.status(400).json({ success: false, added_count: 0, errors: validationErrors });
+    }
+    
+    const existingConflicts = await checkTeacherDuplicates(validTeachers);
+    const duplicateErrors: ValidationError[] = existingConflicts.map(conflict => ({
+        row: conflict.index + 2, data: conflict.teacher,
+        error: `A teacher with this ${conflict.conflictType} already exists.`,
+        field: conflict.conflictType,
+    }));
+    
+    const uniqueTeacherInputs = validTeachers.filter((_, index) => !existingConflicts.some(c => c.index === index));
+
+    if (uniqueTeacherInputs.length === 0) {
+        return res.status(400).json({ success: false, added_count: 0, errors: [...validationErrors, ...duplicateErrors] });
+    }
+
+    let createdTeacherRecords: PublicTeacherData[] = [];
+
+    try {
+        await prisma.$transaction(async (tx) => {
+            const teachersToCreate = uniqueTeacherInputs.map(teacherData => ({
+                ...teacherData, center_id: centerId,
+            }));
+            await tx.teacher.createMany({ data: teachersToCreate });
+            const createdTeachers = await tx.teacher.findMany({
+                where: { email: { in: uniqueTeacherInputs.map(t => t.email) } }
+            });
+            const teacherSchoolLinks = createdTeachers.flatMap(teacher => 
+                schoolIdsArray.map(schoolId => ({
+                    teacher_id: teacher.id, school_id: schoolId,
+                    specialisation: "General"
+                }))
+            );
+            if (teacherSchoolLinks.length > 0) {
+                await tx.teacherSchool.createMany({ data: teacherSchoolLinks });
+            }
+            createdTeacherRecords = createdTeachers.map(sanitizeTeacherData);
+        });
+
+        res.status(201).json({
+            success: true, added_count: createdTeacherRecords.length,
+            total_processed: rawData.length, validation_errors: validationErrors.length,
+            duplicate_errors: duplicateErrors.length, errors: [...validationErrors, ...duplicateErrors],
+            teachers: createdTeacherRecords,
+        });
+    } catch (error) {
+        console.error("Transaction failed:", error);
+        throw new AppError("Failed to create teachers from Excel due to an internal error.", 500);
+    }
 });
+
+
+// --- Other Endpoints ---
+
 export const getTeacherById = catchAsync(async (req: Request, res: Response) => {
   const { teacherId } = req.params;
-
-  if (!teacherId) {
-    throw new AppError("teacherId is required", 400);
-  }
-
+  if (!teacherId) throw new AppError("teacherId is required", 400);
   const teacher = await prisma.teacher.findUnique({
     where: { id: teacherId },
     select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      gender: true,
-      role: true,
-      designation: true,
-      linkedin: true,
-      github_link: true,
-      personal_mail: true,
-      center: {
-        select: {
-          id: true,
-          name: true
-        }
-      },
-      teacherSchools: {
-        select: {
-          school: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      }
+      id: true, name: true, email: true, phone: true, pwId: true,
+      gender: true, role: true, designation: true, linkedin: true,
+      github_link: true, personal_mail: true,
+      center: { select: { id: true, name: true } },
+      teacherSchools: { select: { school: { select: { id: true, name: true } } } }
     }
   });
-
-  if (!teacher) {
-    throw new AppError("Teacher not found", 404);
-  }
-
-  res.status(200).json({
-    success: true,
-    data: teacher
-  });
+  if (!teacher) throw new AppError("Teacher not found", 404);
+  res.status(200).json({ success: true, data: teacher });
 });
 
 export const getTeachersByCenterId = catchAsync(async (req: Request, res: Response) => {
   const { centerId } = req.params;
-
-  if (!centerId) {
-    throw new AppError("centerId is required", 400);
-  }
-
-  const center = await prisma.center.findUnique({
-    where: { id: centerId },
-    select: { id: true, name: true }
-  });
-
-  if (!center) {
-    throw new AppError("Center not found", 404);
-  }
-
+  if (!centerId) throw new AppError("centerId is required", 400);
+  const center = await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, name: true } });
+  if (!center) throw new AppError("Center not found", 404);
   const teachers = await prisma.teacher.findMany({
     where: { center_id: centerId },
     select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      gender: true,
-      role: true,
-      designation: true,
-      linkedin: true,
-      github_link: true,
-      personal_mail: true
+      id: true, name: true, email: true, phone: true, pwId: true,
+      gender: true, role: true, designation: true, linkedin: true,
+      github_link: true, personal_mail: true
     },
     orderBy: { createdAt: "desc" }
   });
-
   res.status(200).json({
-    success: true,
-    center: { id: center.id, name: center.name },
-    count: teachers.length,
-    data: teachers
+    success: true, center: { id: center.id, name: center.name },
+    count: teachers.length, data: teachers
   });
 });
 
 export const getTeachersBySchoolId = catchAsync(async (req: Request, res: Response) => {
   const { schoolId } = req.params;
-
-  if (!schoolId) {
-    throw new AppError("schoolId is required", 400);
-  }
-
+  if (!schoolId) throw new AppError("schoolId is required", 400);
   const school = await prisma.school.findUnique({
     where: { id: schoolId },
-    select: {
-      id: true,
-      name: true,
-      center: {
-        select: {
-          id: true,
-          name: true
-        }
-      }
-    }
+    select: { id: true, name: true, center: { select: { id: true, name: true } } }
   });
-
-  if (!school) {
-    throw new AppError("School not found", 404);
-  }
-
+  if (!school) throw new AppError("School not found", 404);
   const teacherSchools = await prisma.teacherSchool.findMany({
     where: { school_id: schoolId },
     select: {
       teacher: {
         select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          gender: true,
-          role: true,
-          designation: true,
-          linkedin: true,
-          github_link: true,
-          personal_mail: true,
-          createdAt: true
+          id: true, name: true, email: true, phone: true, pwId: true,
+          gender: true, role: true, designation: true, linkedin: true,
+          github_link: true, personal_mail: true, createdAt: true
         }
       }
     },
     orderBy: { teacher: { createdAt: "desc" } }
   });
-
   const teachers = teacherSchools.map(ts => ts.teacher);
-
   res.status(200).json({
-    success: true,
-    school: { id: school.id, name: school.name },
-    center: school.center,
-    count: teachers.length,
-    data: teachers
+    success: true, school: { id: school.id, name: school.name },
+    center: school.center, count: teachers.length, data: teachers
   });
 });
+
 
 
 export const permanentlyDeleteTeacher = catchAsync(async (req: Request, res: Response) => {
