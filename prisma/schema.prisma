@@ -436,6 +436,7 @@ model Admin {
   googleId            String?
   linkedin            String?
   role_id             String
+  pwId                String?                  @unique
   designation         String?
   googleAccessToken   String?
   googleRefreshToken  String?
@@ -883,6 +884,7 @@ model Teacher {
   email              String                  @unique
   phone              String                  @unique
   role               TeacherRole
+  pwId               String?                  @unique
   googleId           String?
   linkedin           String?
   personal_mail      String?
@@ -890,6 +892,9 @@ model Teacher {
   gender             Gender?
   center_id          String
   designation        String?
+  
+  supervising_teacher_id String? 
+  
   googleAccessToken  String?
   googleRefreshToken String?
   googleTokenExpiry  DateTime?
@@ -897,6 +902,7 @@ model Teacher {
   createdAt          DateTime                @default(now()) @map("created_at")
   updatedAt          DateTime                @default(now()) @map("updated_at")
   about              String?
+  
   classes            Class[]
   clubOfficials      ClubOfficial[]
   examMarks          StudentExamMarks[]      @relation("GradedExams")
@@ -911,10 +917,13 @@ model Teacher {
   contestModerations ContestModerator[]
   createdProblems    Problem[]
   problemModerations ProblemModerator[]
+  
+  supervisingTeacher Teacher?  @relation("TeacherAssistant", fields: [supervising_teacher_id], references: [id], onDelete: SetNull)
+  assistantTeachers  Teacher[] @relation("TeacherAssistant")
 
   @@index([center_id], map: "teacher_center_id_idx")
+  @@index([supervising_teacher_id], map: "teacher_supervising_teacher_idx")
 }
-
 model TeacherResearchPaper {
   id                String        @id @default(dbgenerated("gen_random_uuid()"))
   teacher_id        String
