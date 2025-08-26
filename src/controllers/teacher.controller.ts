@@ -595,32 +595,7 @@ export const getCenterBatches = catchAsync(async (req: Request, res: Response) =
   });
 });
 
-export const getTeacherSubjects = catchAsync(async (req: Request, res: Response) => {
-  const teacherId = req.user?.id; 
 
-  if (!teacherId) {
-    throw new AppError('Teacher ID not found in token.', 401);
-  }
-
-  const subjects = await prisma.subject.findMany({
-    where: {
-      teacher_id: teacherId
-    },
-    select: {
-      id: true,
-      name: true
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  });
-
-  res.status(200).json({
-    success: true,
-    message: 'Teacher subjects retrieved successfully.',
-    data: subjects
-  });
-});
 export const updateTeacherExperience = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;

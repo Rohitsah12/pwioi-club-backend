@@ -63,42 +63,6 @@ export const createBatch = catchAsync(async (
   });
 });
 
-export const getAllBatchesCenterwise = catchAsync(async (
-  req: Request,
-  res: Response
-) => {
-  const { centerId } = req.params;
-  if (!centerId) {
-    throw new AppError("schoolId Required", 400);
-  }
-  const { role } = req.user!;
-
-  const center = await prisma.center.findUnique({
-    where: { id: centerId },
-  });
-  if (!center) throw new AppError("Center not found", 404);
-
-  if (role === AuthorRole.ADMIN || role === AuthorRole.SUPER_ADMIN) {
-    const batches = await prisma.batch.findMany({
-      where: { center_id: centerId },
-      select: {
-        id: true,
-        name: true,
-        school: {
-          select: {
-            id: true,
-            name: true,
-            center_id: true
-          }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
-    return res.status(200).json({ success: true, count: batches.length, data: batches });
-  }
-
-  throw new AppError("Role not permitted", 403);
-});
 
 export const getAllBatchesSchoolwise = catchAsync(async (
   req: Request,
