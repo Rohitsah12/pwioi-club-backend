@@ -8,8 +8,11 @@ import {
     deleteAdmin 
 } from "../controllers/admin.controller.js";
 import { getAttendanceAnalyticsAdmin } from "../controllers/adminAttendance.controller.js";
+import { getExamAnalyticsController } from "../controllers/adminExam.controller.js";
 
 const adminRouter = Router();
+
+adminRouter.get('/exam-analytics',authenticateJwt,requireRoles('SUPER_ADMIN', 'ADMIN', 'BATCHOPS', 'OPS'),getExamAnalyticsController)
 
 adminRouter.get('/attendance-analytics',authenticateJwt,requireRoles('SUPER_ADMIN', 'ADMIN', 'BATCHOPS', 'OPS'),getAttendanceAnalyticsAdmin)
 
