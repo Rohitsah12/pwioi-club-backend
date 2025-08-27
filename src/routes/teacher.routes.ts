@@ -25,6 +25,7 @@ import {
   getTeacherResearchPaperById,
   getTeachersByCenterId,
   getTeachersBySchoolId,
+  getTeacherSubjects,
   permanentlyDeleteTeacher,
   updateTeacherExperience,
   updateTeacherResearchPaper,
@@ -64,6 +65,7 @@ teacherRoutes.delete("/:teacherId/academic-history/:educationId", authenticateJw
 teacherRoutes.get("/me/active-subject-attendance", authenticateJwt, requireRoles("TEACHER"), getActiveSubjectAttendance);
 teacherRoutes.get("/assistant-teachers", authenticateJwt, getAssistantTeachers);
 teacherRoutes.get("/batches", authenticateJwt, getCenterBatches);
+teacherRoutes.get("/subjects", authenticateJwt, getTeacherSubjects);
 
 teacherRoutes.get("/center/:centerId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getTeachersByCenterId);
 teacherRoutes.get("/school/:schoolId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getTeachersBySchoolId);

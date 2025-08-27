@@ -4,17 +4,17 @@ import { uploadCprSheet, getCprBySubject, deleteCprBySubject } from '../controll
 import { updateSubTopicStatus } from '../controllers/teacherCpr.controller.js';
 import { authenticateJwt, requireRoles } from '../middlewares/authMiddleware.js';
 
-const router = Router();
+const cprRoutes = Router();
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 
-router.post('/upload',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","OPS","BATCHOPS"),upload.single('file'),uploadCprSheet);
+cprRoutes.post('/upload',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","OPS","BATCHOPS"),upload.single('file'),uploadCprSheet);
 
-router.get('/subject/:subjectId',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","BATCHOPS","OPS","TEACHER","ASSISTANT_TEACHER"),getCprBySubject);
+cprRoutes.get('/subject/:subjectId',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","BATCHOPS","OPS","TEACHER","ASSISTANT_TEACHER"),getCprBySubject);
 
-router.delete('/subject/:subjectId', authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN", "OPS", "BATCHOPS"), deleteCprBySubject);
-router.patch('/sub-topics/:subTopicId/status',authenticateJwt,requireRoles("TEACHER","ASSISTANT_TEACHER") ,updateSubTopicStatus);
+cprRoutes.delete('/subject/:subjectId', authenticateJwt, requireRoles("ADMIN", "SUPER_ADMIN", "OPS", "BATCHOPS"), deleteCprBySubject);
+cprRoutes.patch('/sub-topics/:subTopicId/status',authenticateJwt,requireRoles("TEACHER","ASSISTANT_TEACHER") ,updateSubTopicStatus);
 
-export default router;
+export default cprRoutes;
