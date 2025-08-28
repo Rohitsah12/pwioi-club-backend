@@ -252,29 +252,43 @@ export const getOverallLeaderboard = catchAsync(
 export const getCurrentSemesterDetails = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const studentId = req.user!.id;
+    const today = new Date();
 
-    const student = await prisma.student.findUnique({
+    // First, get the student's division to find relevant semesters
+    const studentInfo = await prisma.student.findUnique({
       where: { id: studentId },
+      select: { division_id: true }
+    });
+
+    if (!studentInfo) {
+      return next(new AppError("Student not found", 404));
+    }
+
+    // Find the semester that is currently running based on today's date
+    const currentSemester = await prisma.semester.findFirst({
+      where: {
+        division_id: studentInfo.division_id,
+        start_date: { lte: today }, // Semester has started
+        end_date: { gte: today }    // Semester has not ended yet
+      },
       include: {
-        semester: {
+        subjects: {
           include: {
-            subjects: {
-              include: {
-                teacher: true,
-                examMarks: { where: { student_id: studentId } },
-                exams: {
-                  include: { marks: { where: { student_id: studentId } } }
-                }
-              }
+            teacher: true,
+            examMarks: { where: { student_id: studentId } },
+            exams: {
+              include: { marks: { where: { student_id: studentId } } }
             }
           }
         }
       }
     });
-    if (!student) return next(new AppError("Student not found", 404));
-    if (!student.semester) return next(new AppError("Current semester not found", 404));
 
-    const subjects = student.semester.subjects.map(subject => {
+    if (!currentSemester) {
+      return next(new AppError("No currently running semester found for the student", 404));
+    }
+
+    const subjects = currentSemester.subjects.map(subject => {
       const studentExamMarks = subject.examMarks;
       const totalExams = subject.exams.length;
       const examsAttempted = subject.exams.filter(exam =>
@@ -285,11 +299,14 @@ export const getCurrentSemesterDetails = catchAsync(
       const averageMarks = validMarks.length
         ? validMarks.reduce((sum, mark) => sum + mark.marks_obtained, 0) / validMarks.length
         : 0;
+
       const totalPossibleMarks = subject.exams.reduce((sum, exam) => {
         const studentMark = exam.marks.find(mark => mark.student_id === studentId && mark.is_present);
         return studentMark ? sum + exam.full_marks : sum;
       }, 0);
+
       const totalObtainedMarks = validMarks.reduce((sum, mark) => sum + mark.marks_obtained, 0);
+
       const averagePercentage = totalPossibleMarks
         ? (totalObtainedMarks / totalPossibleMarks) * 100
         : 0;
@@ -309,6 +326,7 @@ export const getCurrentSemesterDetails = catchAsync(
         }
       };
     });
+
     const totalCredits = subjects.reduce((sum, s) => sum + s.credits, 0);
     const overallAverage = subjects.length
       ? subjects.reduce((sum, s) => sum + s.current_performance.average_percentage, 0) / subjects.length
@@ -318,10 +336,10 @@ export const getCurrentSemesterDetails = catchAsync(
       success: true,
       data: {
         semester_info: {
-          semester_id: student.semester.id,
-          semester_number: student.semester.number,
-          start_date: student.semester.start_date,
-          end_date: student.semester.end_date,
+          semester_id: currentSemester.id,
+          semester_number: currentSemester.number,
+          start_date: currentSemester.start_date,
+          end_date: currentSemester.end_date,
           total_credits: totalCredits,
           overall_average: Math.round(overallAverage * 100) / 100,
         },
@@ -330,22 +348,29 @@ export const getCurrentSemesterDetails = catchAsync(
     });
   }
 );
-
 export const getPastSemestersDetails = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const studentId = req.user!.id;
+    const today = new Date();
 
-    const student = await prisma.student.findUnique({
+    // First, get the student's division to find relevant semesters
+    const studentInfo = await prisma.student.findUnique({
       where: { id: studentId },
-      include: { semester: true }
+      select: { division_id: true }
     });
-    if (!student) return next(new AppError("Student not found", 404));
 
+    if (!studentInfo) {
+      return next(new AppError("Student not found", 404));
+    }
+
+    // Find all semesters that have already ended
     const pastSemesters = await prisma.semester.findMany({
       where: {
-        division_id: student.semester?.division_id,
-        NOT: { id: student.semester_id },
-        end_date: { not: null, lt: new Date() }
+        division_id: studentInfo.division_id,
+        end_date: {
+          not: null,
+          lt: today // Find semesters where the end date is less than today
+        }
       },
       include: {
         subjects: {
@@ -361,9 +386,6 @@ export const getPastSemestersDetails = catchAsync(
 
     const pastSemestersData = pastSemesters.map(semester => {
       const subjects = semester.subjects.map(subject => {
-        const studentExamMarks = subject.examMarks;
-        const validMarks = studentExamMarks.filter(mark => mark.is_present);
-
         let totalWeightedMarks = 0;
         let totalWeightage = 0;
 
@@ -377,14 +399,13 @@ export const getPastSemestersDetails = catchAsync(
         });
 
         const finalPercentage = totalWeightage ? totalWeightedMarks / totalWeightage : 0;
-        const finalGrade = finalPercentage;
 
         return {
           subject_id: subject.id,
           subject_name: subject.name,
           subject_code: subject.code,
           credits: subject.credits,
-          final_grade: Math.round(finalGrade * 100) / 100,
+          // NOTE: final_grade was the same as final_percentage, removed for clarity.
           final_percentage: Math.round(finalPercentage * 100) / 100,
           teacher_name: subject.teacher.name
         };
