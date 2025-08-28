@@ -717,7 +717,7 @@ model Cohort {
 
 model Division {
   id               String    @id @default(dbgenerated("gen_random_uuid()"))
-  code             String    @unique
+  code             String   
   center_id        String
   school_id        String
   batch_id         String

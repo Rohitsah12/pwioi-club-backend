@@ -241,7 +241,8 @@ export const createTeachersFromExcel = catchAsync(async (req: Request, res: Resp
     if (!sheetName) throw new AppError("Excel file contains no sheets", 400);
 
     const worksheet = workbook.Sheets[sheetName];
-    const rawData = XLSX.utils.sheet_to_json(worksheet!);
+    const rawData = XLSX.utils.sheet_to_json(worksheet!, { raw: false });
+
 
     const REQUIRED_COLUMNS = ['name', 'email', 'phone', 'role', 'gender'];
     if (rawData.length > 0) {
@@ -624,7 +625,7 @@ export const getTeacherSubjects = catchAsync(async (req: Request, res: Response)
 export const updateTeacherExperience = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
-    const experienceId = req.params.id;
+    const experienceId = req.params.experienceId;
 
     if (!experienceId) {
       throw new AppError("Experience Id required", 400);
@@ -675,7 +676,7 @@ export const getActiveSubjectAttendance = catchAsync(
 export const deleteTeacherExperience = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
-    const experienceId = req.params.id;
+    const experienceId = req.params.experienceId;
     if (!experienceId) {
       throw new AppError("Experience Id required", 400)
     }
@@ -705,7 +706,7 @@ export const getTeacherAllExperience = catchAsync(
 export const getTeacherExperienceById = catchAsync(
   async (req: Request, res: Response) => {
     const user = req.user!;
-    const experienceId = req.params.id;
+    const experienceId = req.params.experienceId;
     if (!experienceId) {
       throw new AppError("Experience Id required", 400)
     }

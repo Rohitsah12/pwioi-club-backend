@@ -149,7 +149,7 @@ export const uploadExamMarks = async (req: Request, res: Response) => {
 export const getAllExamByExamType = async (req: Request, res: Response) => {
   try {
     const { subjectId } = req.params;
-    const { exam_type } = req.body;
+    const { exam_type } = req.query as { exam_type?: string };
     if (!subjectId) {
       return res.status(400).json({
         success: false,
@@ -186,7 +186,7 @@ export const getAllExamByExamType = async (req: Request, res: Response) => {
     const exams = await prisma.exam.findMany({
       where: {
         subject_id: subjectId,
-        exam_type: exam_type
+        exam_type: exam_type as ExamType
       },
       select: {
         id: true,

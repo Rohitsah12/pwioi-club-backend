@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js";
-import { createAchievement, createCertification, createOrUpdateAcademicHistory, createPersonalDetails, createPlacements, createProject, createSocialLinks, createStudentDegreePartner, deleteAcademicHistory, deleteAchievements, deleteCertification, deletePersonalDetails, deletePlacements, deleteProject, deleteSocialLinks, deleteStudentDegreePartner, getAcademicHistory, getAchievementsById, getAllAchievements, getAllCertifications, getAllPlacements, getAllProjects, getAllSocialLinks, getCertificationById, getPersonalDetails, getPlacementsById, getProjectById, getSocialLinksById, getStudentAcademicDetails, getStudentContactInfo, getStudentDegreePartner, getStudentProfiles, updateAchievements, updateCertification, updatePersonalDetails, updatePlacements, updateProject, updateSocialLinks, updateStudentAddress, updateStudentDegreePartner } from "../controllers/studentprofiles.controller.js";
+import { createAchievement, createCertification, createOrUpdateAcademicHistory, createPersonalDetails, createPlacements, createProject, createSocialLinks, createStudentDegreePartner,  deleteAcademicHistoryByEducationId, deleteAchievements, deleteCertification, deletePersonalDetails, deletePlacements, deleteProject, deleteSocialLinks, deleteStudentDegreePartner, getAcademicHistory, getAchievementsById, getAllAchievements, getAllCertifications, getAllPlacements, getAllProjects, getAllSocialLinks, getCertificationById, getPersonalDetails, getPlacementsById, getProjectById, getSocialLinksById, getStudentAcademicDetails, getStudentContactInfo, getStudentDegreePartner, getStudentProfiles, updateAchievements, updateCertification, updatePersonalDetails, updatePlacements, updateProject, updateSocialLinks, updateStudentAddress, updateStudentDegreePartner } from "../controllers/studentprofiles.controller.js";
 
 const studentProfileRoutes=Router();
 
@@ -14,7 +14,7 @@ studentProfileRoutes.delete("/:studentId/personal-details",authenticateJwt,requi
 
 studentProfileRoutes.patch("/:studentId/academic-history",authenticateJwt,requireRoles("STUDENT"),createOrUpdateAcademicHistory)
 studentProfileRoutes.get("/:studentId/academic-history",authenticateJwt,getAcademicHistory)
-studentProfileRoutes.delete("/:studentId/academic-history",authenticateJwt,requireRoles("STUDENT"),deleteAcademicHistory)
+studentProfileRoutes.delete("/:studentId/academic-history/:educationId", authenticateJwt, requireRoles("STUDENT"), deleteAcademicHistoryByEducationId);
 
 
 studentProfileRoutes.get("/:studentId/projects",authenticateJwt,getAllProjects)

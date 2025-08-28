@@ -39,7 +39,113 @@ export const createCenter = catchAsync(
         });
     }
 );
+export const updateCenter = catchAsync(async (req: Request, res: Response) => {
+    const { centerId } = req.params;
+    const { 
+        name, 
+        location, 
+        code, 
+        business_head, 
+        academic_head 
+    } = req.body;
 
+    if (!centerId) {
+        throw new AppError("Center ID is required.", 400);
+    }
+
+    // Check if center exists
+    const existingCenter = await prisma.center.findUnique({
+        where: { id: centerId },
+        include: {
+            businessHead: {
+                select: { id: true, name: true, email: true }
+            },
+            academicHead: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    if (!existingCenter) {
+        throw new AppError("Center not found.", 404);
+    }
+
+    // Validate unique code if provided
+    if (code && code !== existingCenter.code) {
+        const codeExists = await prisma.center.findUnique({
+            where: { code: code }
+        });
+
+        if (codeExists) {
+            throw new AppError("Center code already exists.", 400);
+        }
+    }
+
+    // Validate business head exists if provided
+    if (business_head) {
+        const businessHead = await prisma.admin.findUnique({
+            where: { id: business_head }
+        });
+
+        if (!businessHead) {
+            throw new AppError("Business head admin not found.", 404);
+        }
+    }
+
+    // Validate academic head exists if provided
+    if (academic_head) {
+        const academicHead = await prisma.admin.findUnique({
+            where: { id: academic_head }
+        });
+
+        if (!academicHead) {
+            throw new AppError("Academic head admin not found.", 404);
+        }
+    }
+
+    // Prepare update data (only include fields that are provided)
+    const updateData: any = {};
+    
+    if (name !== undefined) updateData.name = name;
+    if (location !== undefined) updateData.location = location;
+    if (code !== undefined) updateData.code = code;
+    if (business_head !== undefined) updateData.business_head = business_head;
+    if (academic_head !== undefined) updateData.academic_head = academic_head;
+
+    // Add updatedAt timestamp
+    updateData.updatedAt = new Date();
+
+    // Update the center
+    const updatedCenter = await prisma.center.update({
+        where: { id: centerId },
+        data: updateData,
+        include: {
+            businessHead: {
+                select: { id: true, name: true, email: true }
+            },
+            academicHead: {
+                select: { id: true, name: true, email: true }
+            },
+            _count: {
+                select: {
+                    students: true,
+                    teachers: true,
+                    batches: true,
+                    rooms: true,
+                    schools: true
+                }
+            }
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Center updated successfully.",
+        data: {
+            center: updatedCenter
+        }
+    });
+});
 export const assignCenterHeads = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const code = Number(req.params.code);

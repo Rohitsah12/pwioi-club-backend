@@ -11,7 +11,7 @@ import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js"
 
 const superadminrouter = Router();
 
-superadminrouter.post('/create',authenticateJwt,requireRoles('SUPER_ADMIN','ADMIN','BATCHOPS','OPS'),createSuperAdmin);
+superadminrouter.post('/create',createSuperAdmin);
 superadminrouter.get('/all',authenticateJwt,requireRoles('SUPER_ADMIN','ADMIN','BATCHOPS','OPS'),getAllSuperAdmin);
 superadminrouter.get('/:superadminId',authenticateJwt,requireRoles('SUPER_ADMIN','ADMIN','BATCHOPS','OPS'),getSuperAdminById);
 superadminrouter.put('/:superadminId',authenticateJwt,requireRoles('SUPER_ADMIN','ADMIN','BATCHOPS','OPS'),updateSuperAdmin);
