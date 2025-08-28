@@ -88,7 +88,7 @@ export const updateDivision = catchAsync(async (
 
     const division = await prisma.division.findUnique({
         where: { id: divisionId },
-        select: { id: true, center_id: true, current_semester: true } // Fetch current_semester for comparison
+        select: { id: true, center_id: true, current_semester: true }
     });
 
     if (!division) {
@@ -153,7 +153,6 @@ export const updateDivision = catchAsync(async (
     }
     // --- AUTOMATION LOGIC END --- //
 
-
     if (Object.keys(data).length === 0) {
         return res.status(400).json({
             success: false,
@@ -174,9 +173,6 @@ export const updateDivision = catchAsync(async (
         data: updatedDivision
     });
 });
-
-
-// ... (deleteDivision, getDivisionBatch, etc. remain the same) ...
 
 export const deleteDivision = catchAsync(async (req: Request, res: Response) => {
     const { divisionId } = req.params;
@@ -319,7 +315,7 @@ export const getDivisionDetails = catchAsync(async (
     const division = await prisma.division.findUnique({
         where: { id: divisionId },
         include: {
-            semester: {
+            currentSemester: {
                 select: {
                     id: true,
                     number: true
@@ -355,7 +351,6 @@ export const getDivisionDetails = catchAsync(async (
         where: { division_id: divisionId }
     });
 
-
     const totalSemesters = await prisma.semester.count({
         where: { division_id: divisionId }
     });
@@ -368,28 +363,7 @@ export const getDivisionDetails = catchAsync(async (
 
     const highestSemesterNumber = allSemesters.length > 0 ? allSemesters[0]!.number : 0;
 
-    const teacherCount = await prisma.teacher.count({
-        where: {
-            classes: {
-                some: {
-                    division_id: divisionId
-                }
-            }
-        }
-    });
-
-    const teacherCountBySemester = await prisma.teacher.count({
-        where: {
-            subjects: {
-                some: {
-                    semester: {
-                        division_id: divisionId
-                    }
-                }
-            }
-        }
-    });
-
+    // Get unique teachers from both classes and subjects
     const uniqueTeacherIds = new Set();
     
     const teachersFromClasses = await prisma.teacher.findMany({
@@ -428,8 +402,8 @@ export const getDivisionDetails = catchAsync(async (
         data: {
             ...division,
             current_semester: {
-                id: division.semester?.id || null,
-                number: division.semester?.number || null
+                id: division.currentSemester?.id || null,
+                number: division.currentSemester?.number || null
             },
             total_semesters: totalSemesters,
             highest_semester_reached: highestSemesterNumber,
