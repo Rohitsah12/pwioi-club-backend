@@ -32,8 +32,6 @@ model Class {
   googleEventId  String
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @default(now()) @map("updated_at")
-  sub_topic_id String?
-  subTopic     CprSubTopic? @relation(fields: [sub_topic_id], references: [id], onDelete: SetNull) // On sub-topic deletion, don't delete the class
   attendances    Attendance[]
   division       Division     @relation(fields: [division_id], references: [id], onDelete: Cascade)
   room           Room         @relation(fields: [room_id], references: [id], onDelete: Cascade)
@@ -47,6 +45,7 @@ model Class {
   @@index([teacher_id], map: "class_teacher_id_idx")
   @@index([room_id], map: "class_room_id_idx")
 }
+
 
 model Scan {
   id                 String              @id @default(dbgenerated("gen_random_uuid()"))
@@ -1177,25 +1176,24 @@ model CprTopic {
 }
 
 model CprSubTopic {
-  id                 String     @id @default(dbgenerated("gen_random_uuid()"))
+  id                 String    @id @default(dbgenerated("gen_random_uuid()"))
   name               String
   order              Int
   topic_id           String
-  lecture_count      Int        @default(1)
+  lecture_number     Int       @default(1) // Changed from lecture_count
 
   // Tracking Fields
-  status             CPRStatus  @default(PENDING)
+  status             CPRStatus @default(PENDING)
   planned_start_date DateTime?
   planned_end_date   DateTime?
   actual_start_date  DateTime?
   actual_end_date    DateTime?
 
-  topic              CprTopic   @relation(fields: [topic_id], references: [id], onDelete: Cascade)
-  classes            Class[]
+  topic              CprTopic  @relation(fields: [topic_id], references: [id], onDelete: Cascade)
 
-  createdAt          DateTime   @default(now()) @map("created_at")
-  updatedAt          DateTime   @updatedAt @map("updated_at")
-  
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
   @@unique([topic_id, order])
   @@index([topic_id])
 }

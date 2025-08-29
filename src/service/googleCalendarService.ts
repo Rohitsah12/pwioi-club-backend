@@ -1,10 +1,8 @@
-// src/services/googleCalendar.service.ts
-
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../db/prisma.js';
 import { AppError } from '../utils/AppError.js';
-import { encrypt, decrypt } from '../utils/encryption.js'; // <-- IMPORT ENCRYPTION UTILS
+import { encrypt, decrypt } from '../utils/encryption.js';
 
 interface EventDetails {
   summary: string;
@@ -22,12 +20,12 @@ class GoogleCalendarService {
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI // Ensure this is a generic redirect URI if used server-side
+      process.env.GOOGLE_REDIRECT_URI
     );
   }
 
   /**
-   * Get authenticated Calendar client for a teacher
+   * Get authenticated Calendar client for a teacher and their email
    */
   private async getCalendarClient(teacherId: string) {
     const teacher = await prisma.teacher.findUnique({
@@ -39,17 +37,14 @@ class GoogleCalendarService {
       throw new AppError('Teacher not found or Google Calendar not connected', 404);
     }
 
-    // <-- DECRYPT the token before using it
     const decryptedRefreshToken = decrypt(teacher.googleRefreshToken);
     this.oauth2Client.setCredentials({
       refresh_token: decryptedRefreshToken
     });
 
-    // Listen for token refresh events
     this.oauth2Client.on('tokens', async (tokens) => {
       if (tokens.refresh_token) {
         console.log('New refresh token received, updating database...');
-        // <-- ENCRYPT the new token before saving
         const encryptedRefreshToken = encrypt(tokens.refresh_token);
         await prisma.teacher.update({
           where: { id: teacherId },
@@ -58,14 +53,27 @@ class GoogleCalendarService {
       }
     });
 
-    return google.calendar({ version: 'v3', auth: this.oauth2Client });
+    return {
+        calendar: google.calendar({ version: 'v3', auth: this.oauth2Client }),
+        teacherEmail: teacher.email
+    };
   }
 
   /**
    * Create a calendar event
    */
   async createCalendarEvent(teacherId: string, eventDetails: EventDetails): Promise<string> {
-    const calendar = await this.getCalendarClient(teacherId);
+    const { calendar, teacherEmail } = await this.getCalendarClient(teacherId);
+
+    // ** MODIFIED ATTENDEES LIST **
+    const attendeesList = [
+        { email: 'academics@pwioi.com' }, // Static academic email
+        { email: teacherEmail }             // The teacher conducting the class
+    ];
+    // Add student emails if provided
+    if (eventDetails.attendees) {
+        attendeesList.push(...eventDetails.attendees.map(email => ({ email })));
+    }
 
     const event = {
       summary: eventDetails.summary,
@@ -79,7 +87,7 @@ class GoogleCalendarService {
         dateTime: eventDetails.endDateTime.toISOString(),
         timeZone: 'Asia/Kolkata',
       },
-      attendees: eventDetails.attendees?.map(email => ({ email })) || [],
+      attendees: attendeesList,
       reminders: {
         useDefault: false,
         overrides: [
@@ -111,16 +119,16 @@ class GoogleCalendarService {
     eventId: string,
     eventDetails: Partial<EventDetails>
   ): Promise<void> {
-    const calendar = await this.getCalendarClient(teacherId);
+    const { calendar } = await this.getCalendarClient(teacherId);
     
-    const eventPatch = {
-        ...(eventDetails.summary && { summary: eventDetails.summary }),
-        ...(eventDetails.description && { description: eventDetails.description }),
-        ...(eventDetails.location && { location: eventDetails.location }),
-        ...(eventDetails.startDateTime && { start: { dateTime: eventDetails.startDateTime.toISOString(), timeZone: 'Asia/Kolkata' } }),
-        ...(eventDetails.endDateTime && { end: { dateTime: eventDetails.endDateTime.toISOString(), timeZone: 'Asia/Kolkata' } }),
-        ...(eventDetails.attendees && { attendees: eventDetails.attendees.map(email => ({ email })) }),
-    };
+    const eventPatch: any = {};
+    if (eventDetails.summary) eventPatch.summary = eventDetails.summary;
+    if (eventDetails.description) eventPatch.description = eventDetails.description;
+    if (eventDetails.location) eventPatch.location = eventDetails.location;
+    if (eventDetails.startDateTime) eventPatch.start = { dateTime: eventDetails.startDateTime.toISOString(), timeZone: 'Asia/Kolkata' };
+    if (eventDetails.endDateTime) eventPatch.end = { dateTime: eventDetails.endDateTime.toISOString(), timeZone: 'Asia/Kolkata' };
+    // Note: Updating attendees will REPLACE the entire list.
+    if (eventDetails.attendees) eventPatch.attendees = eventDetails.attendees.map(email => ({ email }));
 
     try {
       await calendar.events.patch({
@@ -139,7 +147,7 @@ class GoogleCalendarService {
    * Delete a calendar event
    */
   async deleteCalendarEvent(teacherId: string, eventId: string): Promise<void> {
-    const calendar = await this.getCalendarClient(teacherId);
+    const { calendar } = await this.getCalendarClient(teacherId);
 
     try {
       await calendar.events.delete({
@@ -148,8 +156,7 @@ class GoogleCalendarService {
         sendNotifications: true,
       });
     } catch (error: any) {
-       // If event is already deleted (410 Gone), ignore the error.
-       if (error.code === 410) {
+      if (error.code === 410) { // Event already gone
         console.warn(`Event ${eventId} was already deleted from Google Calendar.`);
         return;
       }
@@ -167,7 +174,7 @@ class GoogleCalendarService {
     endDateTime: Date,
     excludeEventId?: string
   ): Promise<boolean> {
-    const calendar = await this.getCalendarClient(teacherId);
+    const { calendar } = await this.getCalendarClient(teacherId);
 
     try {
       const response = await calendar.events.list({
@@ -179,16 +186,10 @@ class GoogleCalendarService {
       });
 
       const conflictingEvents = response.data.items?.filter(event => {
-        // Exclude the event being updated/rescheduled
-        if (excludeEventId && event.id === excludeEventId) {
-          return false;
-        }
-        // Exclude events where the user has declined
+        if (excludeEventId && event.id === excludeEventId) return false;
         if (event.attendees) {
             const self = event.attendees.find(a => a.self);
-            if (self && self.responseStatus === 'declined') {
-                return false;
-            }
+            if (self && self.responseStatus === 'declined') return false;
         }
         return true;
       });
