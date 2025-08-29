@@ -210,30 +210,68 @@ export const getDivisionBatch = catchAsync(async (
     res: Response
 ) => {
     const { batchId } = req.params;
-    const { role, id } = req.user!;
 
     if (!batchId) {
         throw new AppError("batchId is required", 400);
     }
 
+    // Check if the batch exists
     const batch = await prisma.batch.findUnique({
         where: { id: batchId },
-        select: { center_id: true }
     });
 
     if (!batch) {
         throw new AppError("Batch not found", 404);
     }
 
+    // Fetch divisions and include related data for counting
     const divisions = await prisma.division.findMany({
         where: { batch_id: batchId },
+        include: {
+            // Include current semester details
+            currentSemester: true,
+            // Include all semesters for counting
+            semesters: true,
+            // Include students for counting
+            students: {
+                select: { id: true } // Only select id for counting purposes
+            },
+            // Include classes and the teacher for each class to get unique teachers
+            classes: {
+                include: {
+                    teacher: {
+                        select: { id: true } // Select only the teacher's id
+                    }
+                }
+            }
+        },
         orderBy: { code: "asc" }
     });
 
+    // Process the data to get the required counts
+    const divisionsWithCounts = divisions.map(division => {
+        // Use a Set to store unique teacher IDs
+        const teacherIds = new Set<string>();
+        division.classes.forEach(cls => {
+            teacherIds.add(cls.teacher_id);
+        });
+
+        // Remove the nested relations from the final output for a cleaner response
+        const { classes, ...divisionData } = division;
+
+        return {
+            ...divisionData,
+            totalSemesters: division.semesters.length,
+            totalStudents: division.students.length,
+            totalTeachers: teacherIds.size,
+        };
+    });
+
+
     res.status(200).json({
         success: true,
-        count: divisions.length,
-        data: divisions
+        count: divisionsWithCounts.length,
+        data: divisionsWithCounts
     });
 });
 
@@ -365,7 +403,7 @@ export const getDivisionDetails = catchAsync(async (
 
     // Get unique teachers from both classes and subjects
     const uniqueTeacherIds = new Set();
-    
+
     const teachersFromClasses = await prisma.teacher.findMany({
         where: {
             classes: {
