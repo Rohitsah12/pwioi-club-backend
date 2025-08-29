@@ -717,7 +717,7 @@ model Cohort {
 
 model Division {
   id               String    @id @default(dbgenerated("gen_random_uuid()"))
-  code             String    @unique
+  code             String
   center_id        String
   school_id        String
   batch_id         String
@@ -729,15 +729,21 @@ model Division {
   classes          Class[]
   batch            Batch     @relation(fields: [batch_id], references: [id], onDelete: Cascade)
   center           Center    @relation(fields: [center_id], references: [id], onDelete: Cascade)
-  semester         Semester? @relation(fields: [current_semester], references: [id], onDelete: Cascade)
   school           School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
   students         Student[]
+
+  // Fixed: Use the same relation name for both sides
+  currentSemester  Semester? @relation("CurrentSemester", fields: [current_semester], references: [id], onDelete: Cascade)
+
+  // This is the 1-to-many relation with a unique name
+  semesters        Semester[] @relation("DivisionSemesters")
 
   @@index([batch_id], map: "division_batch_id_idx")
   @@index([current_semester], map: "division_semester_id_idx")
   @@index([center_id], map: "division_center_id_idx")
   @@index([school_id], map: "division_school_id_idx")
 }
+
 
 model PersonalDetail {
   id                     String   @id @default(dbgenerated("gen_random_uuid()"))
@@ -773,6 +779,7 @@ model Batch {
   @@index([school_id], map: "batch_school_id_idx")
 }
 
+
 model Semester {
   id          String    @id @default(dbgenerated("gen_random_uuid()"))
   number      Int
@@ -781,9 +788,14 @@ model Semester {
   end_date    DateTime?
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @default(now()) @map("updated_at")
-  division    Division?
   students    Student[]
   subjects    Subject[]
+
+  // The many-to-one relation back to division
+  division          Division @relation("DivisionSemesters", fields: [division_id], references: [id], onDelete: Cascade)
+
+  // Fixed: Use the same relation name and add the missing opposite field
+  divisionAsCurrent Division? @relation("CurrentSemester")
 
   @@index([division_id], map: "semester_division_id_idx")
 }

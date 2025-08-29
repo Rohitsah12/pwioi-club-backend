@@ -41,7 +41,6 @@ export const createDivision = catchAsync(async (
 
     const { center_id: centerId, school_id: schoolId } = batch;
 
-    // Allow both ADMIN and SUPER_ADMIN full access
     if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to create division", 403);
     }
@@ -68,8 +67,8 @@ export const createDivision = catchAsync(async (
 
 interface UpdateDivisionRequest {
     code?: string;
-    start_date?: string;      // ISO string
-    end_date?: string;        // ISO string
+    start_date?: string;
+    end_date?: string;
     current_semester?: string; // semesterId
     center_id?: string;
     school_id?: string;
@@ -89,14 +88,13 @@ export const updateDivision = catchAsync(async (
 
     const division = await prisma.division.findUnique({
         where: { id: divisionId },
-        select: { id: true, center_id: true }
+        select: { id: true, center_id: true, current_semester: true }
     });
 
     if (!division) {
         throw new AppError("Division not found", 404);
     }
 
-    // Allow both ADMIN and SUPER_ADMIN full access
     if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to update division", 403);
     }
@@ -104,35 +102,21 @@ export const updateDivision = catchAsync(async (
     const data: any = {};
 
     if (updates.code !== undefined) {
-        if (typeof updates.code !== "string" || updates.code.trim() === "") {
-            throw new AppError("code must be a non-empty string", 400);
-        }
         data.code = updates.code.trim().toUpperCase();
     }
-
     if (updates.start_date !== undefined) {
-        if (isNaN(Date.parse(updates.start_date))) {
-            throw new AppError("Invalid start_date format", 400);
-        }
         data.start_date = new Date(updates.start_date);
     }
-
     if (updates.end_date !== undefined) {
-        if (isNaN(Date.parse(updates.end_date))) {
-            throw new AppError("Invalid end_date format", 400);
-        }
         data.end_date = new Date(updates.end_date);
     }
-
-    if (updates.center_id !== undefined) {
-        throw new AppError("Changing center_id is not allowed", 400);
+    if (updates.center_id !== undefined || updates.school_id !== undefined) {
+        throw new AppError("Changing center_id or school_id is not allowed", 400);
     }
 
-    if (updates.school_id !== undefined) {
-        throw new AppError("Changing school_id is not allowed", 400);
-    }
-
-    if (updates.current_semester !== undefined) {
+    // --- AUTOMATION LOGIC START --- //
+    // This is the core logic for automatically updating students.
+    if (updates.current_semester && updates.current_semester !== division.current_semester) {
         const semester = await prisma.semester.findUnique({
             where: { id: updates.current_semester }
         });
@@ -143,7 +127,31 @@ export const updateDivision = catchAsync(async (
             throw new AppError("Semester does not belong to this division", 400);
         }
         data.current_semester = updates.current_semester;
+
+        // Use a transaction to ensure both the division and all its students are updated successfully.
+        await prisma.$transaction(async (tx) => {
+            // 1. Update the division itself
+            await tx.division.update({
+                where: { id: divisionId },
+                data: { current_semester: updates.current_semester!, updatedAt: new Date() }
+            });
+
+            // 2. Update all students in this division to point to the new semester
+            await tx.student.updateMany({
+                where: { division_id: divisionId },
+                data: { semester_id: updates.current_semester! }
+            });
+        });
+
+        // Since the transaction handles the update, we can send the response.
+        const updatedDivision = await prisma.division.findUnique({ where: { id: divisionId } });
+        return res.status(200).json({
+            success: true,
+            message: "Division and all associated students have been updated to the new semester.",
+            data: updatedDivision
+        });
     }
+    // --- AUTOMATION LOGIC END --- //
 
     if (Object.keys(data).length === 0) {
         return res.status(400).json({
@@ -174,7 +182,6 @@ export const deleteDivision = catchAsync(async (req: Request, res: Response) => 
         throw new AppError("divisionId is required", 400);
     }
 
-    // Fetch the division with center info for authorization
     const division = await prisma.division.findUnique({
         where: { id: divisionId },
         select: { center_id: true }
@@ -184,12 +191,10 @@ export const deleteDivision = catchAsync(async (req: Request, res: Response) => 
         throw new AppError("Division not found", 404);
     }
 
-    // Allow both ADMIN and SUPER_ADMIN full access
     if (role !== AuthorRole.ADMIN && role !== AuthorRole.SUPER_ADMIN) {
         throw new AppError("Role not permitted to delete division", 403);
     }
 
-    // Proceed to delete the division
     await prisma.division.delete({
         where: { id: divisionId }
     });
@@ -220,8 +225,6 @@ export const getDivisionBatch = catchAsync(async (
         throw new AppError("Batch not found", 404);
     }
 
-    const centerId = batch.center_id;
-
     const divisions = await prisma.division.findMany({
         where: { batch_id: batchId },
         orderBy: { code: "asc" }
@@ -245,7 +248,6 @@ export const getDivisionBySchool = catchAsync(async (
         throw new AppError("schoolId is required", 400);
     }
 
-    // Get school with center_id
     const school = await prisma.school.findUnique({
         where: { id: schoolId },
         select: { center_id: true }
@@ -310,10 +312,35 @@ export const getDivisionDetails = catchAsync(async (
         throw new AppError("Division not found", 404);
     }
 
-
-    // Fetch division details without relations
     const division = await prisma.division.findUnique({
         where: { id: divisionId },
+        include: {
+            currentSemester: {
+                select: {
+                    id: true,
+                    number: true
+                }
+            },
+            center: {
+                select: {
+                    id: true,
+                    name: true,
+                    code: true
+                }
+            },
+            school: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            },
+            batch: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        }
     });
 
     if (!division) {
@@ -324,12 +351,69 @@ export const getDivisionDetails = catchAsync(async (
         where: { division_id: divisionId }
     });
 
+    const totalSemesters = await prisma.semester.count({
+        where: { division_id: divisionId }
+    });
+
+    const allSemesters = await prisma.semester.findMany({
+        where: { division_id: divisionId },
+        select: { number: true },
+        orderBy: { number: 'desc' }
+    });
+
+    const highestSemesterNumber = allSemesters.length > 0 ? allSemesters[0]!.number : 0;
+
+    // Get unique teachers from both classes and subjects
+    const uniqueTeacherIds = new Set();
+    
+    const teachersFromClasses = await prisma.teacher.findMany({
+        where: {
+            classes: {
+                some: {
+                    division_id: divisionId
+                }
+            }
+        },
+        select: { id: true }
+    });
+
+    const teachersFromSubjects = await prisma.teacher.findMany({
+        where: {
+            subjects: {
+                some: {
+                    semester: {
+                        division_id: divisionId
+                    }
+                }
+            }
+        },
+        select: { id: true }
+    });
+
+    [...teachersFromClasses, ...teachersFromSubjects].forEach(teacher => {
+        uniqueTeacherIds.add(teacher.id);
+    });
+
+    const uniqueTeacherCount = uniqueTeacherIds.size;
+
     res.status(200).json({
         success: true,
         message: "Division details retrieved successfully",
         data: {
             ...division,
-            student_count: studentCount
+            current_semester: {
+                id: division.currentSemester?.id || null,
+                number: division.currentSemester?.number || null
+            },
+            total_semesters: totalSemesters,
+            highest_semester_reached: highestSemesterNumber,
+            student_count: studentCount,
+            teacher_count: uniqueTeacherCount,
+            counts: {
+                students: studentCount,
+                teachers: uniqueTeacherCount,
+                total_semesters: totalSemesters
+            }
         }
     });
 });

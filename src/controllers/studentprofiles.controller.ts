@@ -724,43 +724,62 @@ export const getAcademicHistory = catchAsync(async (req: Request, res: Response)
     });
 });
 
-export const deleteAcademicHistory = catchAsync(async (req: Request, res: Response) => {
-    const { studentId } = req.params;
+export const deleteAcademicHistoryByEducationId = catchAsync(async (req: Request, res: Response) => {
+    const { studentId, educationId } = req.params;
 
-    if (!studentId) {
-        throw new AppError("Student ID is required.", 400);
+    if (!studentId || !educationId) {
+        throw new AppError("Student ID and Education ID are required.", 400);
     }
 
+    // First, find the academic history for the student
     const academicHistory = await prisma.academicHistory.findUnique({
-        where: { student_id: studentId }
+        where: { student_id: studentId },
+        include: {
+            undergrad: true,
+            xEducation: true,
+            xiiEducation: true
+        }
     });
 
     if (!academicHistory) {
         throw new AppError("Academic history not found for this student.", 404);
     }
 
-    // Get education IDs to delete
-    const educationIds = [
-        academicHistory.undergraduate,
-        academicHistory.x_education,
-        academicHistory.xii_education
-    ].filter(Boolean) as string[];
+    // Check which education field matches the educationId and update accordingly
+    let updateData: any = {};
+    let educationFound = false;
 
-    // Delete academic history first (due to foreign key constraints)
-    await prisma.academicHistory.delete({
-        where: { student_id: studentId }
+    if (academicHistory.undergraduate === educationId) {
+        updateData.undergraduate = null;
+        educationFound = true;
+    }
+    if (academicHistory.x_education === educationId) {
+        updateData.x_education = null;
+        educationFound = true;
+    }
+    if (academicHistory.xii_education === educationId) {
+        updateData.xii_education = null;
+        educationFound = true;
+    }
+
+    if (!educationFound) {
+        throw new AppError("Education record not found in academic history for this student.", 404);
+    }
+
+    // Update the academic history to remove the reference
+    await prisma.academicHistory.update({
+        where: { student_id: studentId },
+        data: updateData
     });
 
-    // Then delete associated education records
-    if (educationIds.length > 0) {
-        await prisma.education.deleteMany({
-            where: { id: { in: educationIds } }
-        });
-    }
+    // Delete the education record
+    await prisma.education.delete({
+        where: { id: educationId }
+    });
 
     res.status(200).json({
         success: true,
-        message: "Academic history deleted successfully."
+        message: "Education record deleted successfully from academic history."
     });
 });
 

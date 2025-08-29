@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js";
-import { getCurrentSemesterDetails, getleaderboardDivisionWise, getOverallLeaderboard, getPastSemestersDetails, getStudentPerformanceTrends } from "../controllers/studentAcademics.controller.js";
+import { getCurrentSemesterDetails, getleaderboardDivisionWise, getOverallLeaderboard,  getPastSemestersDetails,  getStudentPerformanceTrends } from "../controllers/studentAcademics.controller.js";
 
 const studentAcademicsRoutes=Router();
 

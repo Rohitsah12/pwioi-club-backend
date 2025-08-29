@@ -3,8 +3,6 @@ import { prisma } from "../db/prisma.js";
 import { catchAsync } from "../utils/catchAsync.js";
 import { AppError } from "../utils/AppError.js";
 
-// ==================== TYPES ====================
-
 interface ExamDetail {
   id: string;
   name: string;
@@ -36,7 +34,7 @@ interface SemesterDetail {
   id: string;
   number: number;
   start_date: Date;
-  end_date: Date;
+  end_date: Date | null;
   is_current: boolean;
   subjects: SubjectDetail[];
   total_subjects: number;
@@ -90,13 +88,21 @@ interface TeacherHierarchyResponse {
   };
 }
 
+// Helper type for building hierarchy with maps
+interface SchoolWithMaps extends SchoolDetail {
+  _batchesMap: Map<string, BatchWithMaps>;
+}
+
+interface BatchWithMaps extends BatchDetail {
+  _divisionsMap: Map<string, DivisionWithMaps>;
+}
+
+interface DivisionWithMaps extends DivisionDetail {
+  _semestersMap: Map<string, SemesterDetail>;
+}
+
 // ==================== CONTROLLER ====================
 
-/**
- * @desc    Get complete teaching hierarchy for logged-in teacher
- * @route   GET /api/teachers/teaching-hierarchy
- * @access  Private (Teacher, Assistant Teacher)
- */
 export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response) => {
   const { id: teacherId } = req.user!;
 
@@ -104,26 +110,24 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
     throw new AppError("Teacher ID not found in token", 400);
   }
 
-  // Get teacher details
+  // 1. Get teacher details
   const teacher = await prisma.teacher.findUnique({
     where: { id: teacherId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      designation: true
-    }
+    select: { 
+      id: true, 
+      name: true, 
+      email: true, 
+      designation: true 
+    },
   });
 
   if (!teacher) {
     throw new AppError("Teacher not found", 404);
   }
 
-  // Get all subjects taught by the teacher with complete hierarchy
-  const subjects = await prisma.subject.findMany({
-    where: {
-      teacher_id: teacherId
-    },
+  // 2. Fetch all subjects with the complete hierarchy using nested includes
+  const subjectsTaught = await prisma.subject.findMany({
+    where: { teacher_id: teacherId },
     include: {
       semester: {
         include: {
@@ -131,23 +135,22 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
             include: {
               batch: {
                 include: {
-                  school: {
-                    select: {
-                      id: true,
-                      name: true,
-                    }
-                  }
-                }
+                  school: true,
+                },
               },
               students: {
                 where: { is_active: true },
-                select: { id: true }
-              }
-            }
-          }
-        }
+                select: { id: true },
+              },
+            },
+          },
+        },
       },
       exams: {
+        orderBy: [
+          { exam_type: "asc" }, 
+          { exam_date: "desc" }
+        ],
         select: {
           id: true,
           name: true,
@@ -156,70 +159,128 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
           weightage: true,
           full_marks: true,
           passing_marks: true,
-          createdAt: true
+          createdAt: true,
         },
-        orderBy: [
-          { exam_type: 'asc' },
-          { exam_date: 'desc' }
-        ]
-      }
+      },
     },
     orderBy: [
-      { semester: { division: { batch: { school: { name: 'asc' } } } } },
-      { semester: { division: { batch: { name: 'asc' } } } },
-      { semester: { division: { code: 'asc' } } },
-      { semester: { number: 'asc' } },
-      { name: 'asc' }
-    ]
+      { semester: { division: { batch: { school: { name: "asc" } } } } },
+      { semester: { division: { batch: { name: "asc" } } } },
+      { semester: { division: { code: "asc" } } },
+      { semester: { number: "asc" } },
+      { name: "asc" },
+    ],
   });
 
-  // Group data by hierarchy
-  const schoolsMap = new Map<string, any>();
-  const batchesMap = new Map<string, any>();
-  const divisionsMap = new Map<string, any>();
-  const semestersMap = new Map<string, any>();
-
+  // 3. Process the flat list into a nested hierarchy
+  const schoolsMap = new Map<string, SchoolWithMaps>();
+  
   let totalExams = 0;
   const examTypeBreakdown: { [key: string]: number } = {};
 
-  // Process each subject and build hierarchy
-  subjects.forEach(subject => {
-    // Check if all required nested relations exist
+  for (const subject of subjectsTaught) {
+    // Validate hierarchy data exists
     if (!subject.semester?.division?.batch?.school) {
-      console.warn(`Skipping subject ${subject.id} due to incomplete hierarchy`);
-      return;
+      console.warn(`Skipping subject ${subject.id} due to incomplete hierarchy data.`);
+      continue;
     }
 
-    const school = subject.semester.division.batch.school;
-    const batch = subject.semester.division.batch;
-    const division = subject.semester.division;
-    const semester = subject.semester;
+    const { school, batch, division, semester } = {
+      school: subject.semester.division.batch.school,
+      batch: subject.semester.division.batch,
+      division: subject.semester.division,
+      semester: subject.semester
+    };
 
-    // Count exams and types
-    subject.exams.forEach(exam => {
+    // --- Update Global Summary ---
+    subject.exams.forEach((exam) => {
       totalExams++;
       examTypeBreakdown[exam.exam_type] = (examTypeBreakdown[exam.exam_type] || 0) + 1;
     });
 
-    // Group exams by type for this subject
+    // --- Build Hierarchy (School -> Batch -> Division -> Semester -> Subject) ---
+
+    // Find or create School
+    if (!schoolsMap.has(school.id)) {
+      schoolsMap.set(school.id, {
+        id: school.id,
+        name: school.name,
+        code:  school.name, // Use code if available, fallback to name
+        batches: [],
+        total_batches: 0,
+        _batchesMap: new Map(),
+      });
+    }
+    const schoolDetail = schoolsMap.get(school.id)!;
+
+    // Find or create Batch
+    if (!schoolDetail._batchesMap.has(batch.id)) {
+      // Parse start and end year from batch name (e.g., "2020-2024")
+      const yearMatch = batch.name.match(/(\d{4})-(\d{4})/);
+      const startYear = yearMatch ? parseInt(yearMatch[1]!) : new Date().getFullYear();
+      const endYear = yearMatch ? parseInt(yearMatch[2]!) : new Date().getFullYear() + 4;
+      
+      // Determine if batch is active (current date is within batch period)
+      const currentYear = new Date().getFullYear();
+      const isActive = currentYear >= startYear && currentYear <= endYear;
+
+      schoolDetail._batchesMap.set(batch.id, {
+        id: batch.id,
+        name: batch.name,
+        start_year: startYear,
+        end_year: endYear,
+        is_active: isActive,
+        divisions: [],
+        total_divisions: 0,
+        _divisionsMap: new Map(),
+      });
+    }
+    const batchDetail = schoolDetail._batchesMap.get(batch.id)!;
+
+    // Find or create Division
+    if (!batchDetail._divisionsMap.has(division.id)) {
+      batchDetail._divisionsMap.set(division.id, {
+        id: division.id,
+        code: division.code,
+        total_students: division.students.length,
+        semesters: [],
+        total_semesters: 0,
+        _semestersMap: new Map(),
+      });
+    }
+    const divisionDetail = batchDetail._divisionsMap.get(division.id)!;
+
+    // Find or create Semester
+    if (!divisionDetail._semestersMap.has(semester.id)) {
+      // Determine if semester is current
+      const currentDate = new Date();
+      const isCurrent = semester.end_date 
+        ? currentDate >= semester.start_date && currentDate <= semester.end_date 
+        : currentDate >= semester.start_date;
+
+      divisionDetail._semestersMap.set(semester.id, {
+        id: semester.id,
+        number: semester.number,
+        start_date: semester.start_date,
+        end_date: semester.end_date,
+        is_current: isCurrent,
+        subjects: [],
+        total_subjects: 0,
+      });
+    }
+    const semesterDetail = divisionDetail._semestersMap.get(semester.id)!;
+
+    // --- Process and add Subject ---
+    // Group exams by type
     const examsByType = new Map<string, ExamDetail[]>();
-    subject.exams.forEach(exam => {
+    subject.exams.forEach((exam) => {
       if (!examsByType.has(exam.exam_type)) {
         examsByType.set(exam.exam_type, []);
       }
-      examsByType.get(exam.exam_type)!.push({
-        id: exam.id,
-        name: exam.name,
-        exam_type: exam.exam_type,
-        exam_date: exam.exam_date,
-        weightage: exam.weightage,
-        full_marks: exam.full_marks,
-        passing_marks: exam.passing_marks,
-        createdAt: exam.createdAt
-      });
+      examsByType.get(exam.exam_type)!.push(exam);
     });
 
-    // Build subject detail
+    // Create subject detail with grouped exams
     const subjectDetail: SubjectDetail = {
       id: subject.id,
       name: subject.name,
@@ -227,115 +288,72 @@ export const getTeacherHierarchy = catchAsync(async (req: Request, res: Response
       credits: subject.credits,
       exam_types: Array.from(examsByType.entries()).map(([type, exams]) => ({
         exam_type: type,
-        exams: exams,
-        total_exams: exams.length
+        exams: exams.sort((a, b) => b.exam_date.getTime() - a.exam_date.getTime()), // Sort by date desc
+        total_exams: exams.length,
       })),
       total_exam_types: examsByType.size,
-      total_exams: subject.exams.length
+      total_exams: subject.exams.length,
     };
 
-    // Initialize or update semester
-    if (!semestersMap.has(semester.id)) {
-      semestersMap.set(semester.id, {
-        id: semester.id,
-        number: semester.number,
-        start_date: semester.start_date,
-        end_date: semester.end_date,
-        is_current: semester.end_date ? 
-          (new Date() >= semester.start_date && new Date() <= semester.end_date) : 
-          (new Date() >= semester.start_date),
-        subjects: [],
-        total_subjects: 0,
-        division_id: division.id
-      });
-    }
-    semestersMap.get(semester.id).subjects.push(subjectDetail);
-    semestersMap.get(semester.id).total_subjects++;
+    semesterDetail.subjects.push(subjectDetail);
+    semesterDetail.total_subjects++;
+  }
 
-    // Initialize or update division
-    if (!divisionsMap.has(division.id)) {
-      divisionsMap.set(division.id, {
-        id: division.id,
-        code: division.code,
-        total_students: division.students.length,
-        semesters: [],
-        total_semesters: 0,
-        batch_id: batch.id
-      });
-    }
-
-    // Initialize or update batch
-    if (!batchesMap.has(batch.id)) {
-      batchesMap.set(batch.id, {
-        id: batch.id,
-        name: batch.name,
-       start_year: parseInt(batch.name.split('-')[0] || '') || new Date().getFullYear(),
-        end_year: parseInt(batch.name.split('-')[1] || '') || new Date().getFullYear() + 4,
-        is_active: true, // You might want to determine this based on some logic
-        divisions: [],
-        total_divisions: 0,
-        school_id: school.id
-      });
-    }
-
-    // Initialize or update school
-    if (!schoolsMap.has(school.id)) {
-      schoolsMap.set(school.id, {
-        id: school.id,
-        name: school.name,
-        code: school.name, // Using name as code since code field doesn't exist in schema
-        batches: [],
-        total_batches: 0
-      });
-    }
-  });
-
-  // Build nested structure
-  const divisionsArray = Array.from(divisionsMap.values());
-  divisionsArray.forEach(division => {
-    division.semesters = Array.from(semestersMap.values())
-      .filter(semester => semester.division_id === division.id)
-      .sort((a, b) => a.number - b.number);
-    division.total_semesters = division.semesters.length;
-  });
-
-  const batchesArray = Array.from(batchesMap.values());
-  batchesArray.forEach(batch => {
-    batch.divisions = divisionsArray
-      .filter(division => division.batch_id === batch.id)
-      .sort((a, b) => a.code.localeCompare(b.code));
-    batch.total_divisions = batch.divisions.length;
-  });
-
-  const schoolsArray = Array.from(schoolsMap.values());
-  schoolsArray.forEach(school => {
-    school.batches = batchesArray
-      .filter(batch => batch.school_id === school.id)
-      .sort((a, b) => b.start_year - a.start_year); // Latest first
+  // 4. Final Transformation: Convert maps to arrays and clean up temporary properties
+  const finalSchools: SchoolDetail[] = Array.from(schoolsMap.values()).map(school => {
+    // Convert batches map to array
+    school.batches = Array.from(school._batchesMap.values()).map(batch => {
+      // Convert divisions map to array
+      batch.divisions = Array.from(batch._divisionsMap.values()).map(division => {
+        // Convert semesters map to array and sort by semester number
+        division.semesters = Array.from(division._semestersMap.values())
+          .sort((a, b) => a.number - b.number);
+        division.total_semesters = division.semesters.length;
+        
+        // Remove the temporary map property
+        const { _semestersMap, ...cleanDivision } = division as any;
+        return cleanDivision;
+      }).sort((a, b) => a.code.localeCompare(b.code)); // Sort divisions by code
+      
+      batch.total_divisions = batch.divisions.length;
+      
+      // Remove the temporary map property
+      const { _divisionsMap, ...cleanBatch } = batch as any;
+      return cleanBatch;
+    }).sort((a, b) => b.start_year - a.start_year); // Sort batches by start year (newest first)
+    
     school.total_batches = school.batches.length;
-  });
+    
+    // Remove the temporary map property
+    const { _batchesMap, ...cleanSchool } = school as any;
+    return cleanSchool;
+  }).sort((a, b) => a.name.localeCompare(b.name)); // Sort schools alphabetically
 
-  // Calculate summary
+  // 5. Calculate summary statistics
   const summary = {
-    total_schools: schoolsArray.length,
-    total_batches: batchesArray.length,
-    total_divisions: divisionsArray.length,
-    total_semesters: semestersMap.size,
-    total_subjects: subjects.length,
-    total_exams: totalExams,
-    exam_type_breakdown: examTypeBreakdown
+    total_schools: finalSchools.length,
+    total_batches: finalSchools.reduce((sum, school) => sum + school.total_batches, 0),
+    total_divisions: finalSchools.reduce((sum, school) => 
+      sum + school.batches.reduce((bSum, batch) => bSum + batch.total_divisions, 0), 0),
+    total_semesters: finalSchools.reduce((sum, school) => 
+      sum + school.batches.reduce((bSum, batch) => 
+        bSum + batch.divisions.reduce((dSum, division) => dSum + division.total_semesters, 0), 0), 0),
+    total_subjects: subjectsTaught.length,
+    total_exams: totalExams, // Fixed: using totalExams instead of total_exams
+    exam_type_breakdown: examTypeBreakdown,
   };
 
+  // 6. Construct final response
   const response: TeacherHierarchyResponse = {
     success: true,
     teacher: {
       id: teacher.id,
       name: teacher.name,
       email: teacher.email,
-      designation: teacher.designation || "Teacher"
+      designation: teacher.designation || "Teacher",
     },
-    schools: schoolsArray.sort((a, b) => a.name.localeCompare(b.name)),
-    summary
+    schools: finalSchools,
+    summary,
   };
 
   res.status(200).json(response);
