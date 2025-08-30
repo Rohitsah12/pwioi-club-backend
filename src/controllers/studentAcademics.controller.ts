@@ -13,12 +13,6 @@ const performanceTrendsSchema = z.object({
   exam_name: z.string().min(1)
 });
 
-const leaderboardSchema = z.object({
-  semester_id: z.string().uuid(),
-  subject_id: z.string().uuid(),
-  exam_type: z.nativeEnum(ExamType),
-  exam_name: z.string().min(1)
-});
 
 
 
@@ -110,13 +104,20 @@ export const getStudentPerformanceTrends = catchAsync(
   }
 );
 
+const leaderboardSchema = z.object({
+  semester_id: z.string().optional(), // Making optional as it's not used in the queries
+  subject_id: z.string(),
+  exam_type: z.nativeEnum(ExamType),
+  exam_name: z.string(),
+});
+
 export const getleaderboardDivisionWise = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const parseResult = leaderboardSchema.safeParse(req.query);
     if (!parseResult.success) {
       return next(new AppError("Invalid query parameters", 400));
     }
-    const { semester_id, subject_id, exam_type, exam_name } = parseResult.data;
+    const { subject_id, exam_type, exam_name } = parseResult.data;
     const studentId = req.user!.id;
 
     const student = await prisma.student.findUnique({
@@ -137,7 +138,10 @@ export const getleaderboardDivisionWise = catchAsync(
         student: { division_id: student.division_id }
       },
       include: { student: { include: { division: true } } },
-      orderBy: [{ marks_obtained: "desc" }]
+      orderBy: [
+        { marks_obtained: "desc" },
+        { student: { name: "asc" } } // Secondary sort by student name
+      ]
     });
 
     const leaderboard = leaderboardData.map((entry, index) => ({
@@ -182,7 +186,7 @@ export const getOverallLeaderboard = catchAsync(
     if (!parseResult.success) {
       return next(new AppError("Invalid query parameters", 400));
     }
-    const { semester_id, subject_id, exam_type, exam_name } = parseResult.data;
+    const { subject_id, exam_type, exam_name } = parseResult.data;
     const studentId = req.user!.id;
 
     const student = await prisma.student.findUnique({
@@ -207,7 +211,10 @@ export const getOverallLeaderboard = catchAsync(
         }
       },
       include: { student: { include: { division: true, center: true } } },
-      orderBy: [{ marks_obtained: "desc" }]
+      orderBy: [
+        { marks_obtained: "desc" },
+        { student: { name: "asc" } } // Secondary sort by student name
+      ]
     });
 
     const leaderboard = leaderboardData.map((entry, index) => ({
@@ -443,3 +450,43 @@ export const getPastSemestersDetails = catchAsync(
     });
   }
 );
+
+
+export const getExamType=catchAsync(async (req, res) => {
+  try {
+    const { subjectId } = req.params;
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(subjectId!)) {
+      return res.status(400).json({ error: 'Invalid Subject ID format.' });
+    }
+    
+    // 3. Query the database using Prisma
+    const exams = await prisma.exam.findMany({
+      where: {
+        // Filter by the provided subject ID
+        subject_id: subjectId!,
+        // Filter for exams where the date is in the past or present
+        exam_date: {
+          lte: new Date(), // lte = less than or equal to
+        },
+      },
+      // Select only the 'exam_type' field
+      select: {
+        exam_type: true,
+      },
+      // Ensure we only get unique (distinct) values
+      distinct: ['exam_type'],
+    });
+
+    // 4. Format and send the response
+    // The query returns `[{ exam_type: '...' }, ...]`, so we map it to `['...']`
+    const examTypes = exams.map(exam => exam.exam_type);
+
+    res.status(200).json(examTypes);
+
+  } catch (error) {
+    console.error('Error fetching exam types:', error);
+    res.status(500).json({ error: 'An internal server error occurred.' });
+  }
+})

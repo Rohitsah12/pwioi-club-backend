@@ -763,7 +763,7 @@ model PersonalDetail {
 
 model Batch {
   id        String         @id @default(dbgenerated("gen_random_uuid()"))
-  name      String         @unique
+  name      String         
   center_id String
   school_id String
   createdAt DateTime       @default(now()) @map("created_at")
