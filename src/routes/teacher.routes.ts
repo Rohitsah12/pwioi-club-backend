@@ -27,6 +27,7 @@ import {
   getTeachersBySchoolId,
   getTeacherSubjects,
   permanentlyDeleteTeacher,
+  updateTeacher,
   updateTeacherExperience,
   updateTeacherResearchPaper,
 } from "../controllers/teacher.controller.js";
@@ -70,6 +71,7 @@ teacherRoutes.get("/subjects", authenticateJwt, getTeacherSubjects);
 teacherRoutes.get("/center/:centerId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getTeachersByCenterId);
 teacherRoutes.get("/school/:schoolId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), getTeachersBySchoolId);
 teacherRoutes.get("/:teacherId", authenticateJwt, getTeacherById);
+teacherRoutes.patch("/:teacherId", authenticateJwt, requireRoles('SUPER_ADMIN', "ADMIN", "BATCHOPS", "OPS"), updateTeacher);
 teacherRoutes.delete("/:teacherId", authenticateJwt, requireRoles('SUPER_ADMIN',"ADMIN","BATCHOPS","OPS"), permanentlyDeleteTeacher);
 
 export default teacherRoutes;
