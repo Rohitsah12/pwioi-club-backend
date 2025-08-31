@@ -7,12 +7,11 @@ import { AuthorRole } from "../types/postApi.js";
 import type { UserRole } from "../auth/types.js";
 import { Gender } from "@prisma/client";
 
-// --- Constants --- //
 const MAX_BATCH_SIZE = 1000;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const PRISMA_BATCH_SIZE = 100;
 
-// --- Interfaces --- //
+
 
 interface StudentInput {
   name: string;
@@ -50,12 +49,11 @@ interface PublicStudentData {
   createdAt: Date;
 }
 
-// MODIFIED: This interface now includes the current_semester.
 interface DivisionDetails {
   center_id: string;
   school_id: string;
   batch_id: string;
-  current_semester: string | null; // Can be null if not set
+  current_semester: string | null; 
 }
 
 interface ExistingConflict {
@@ -65,14 +63,7 @@ interface ExistingConflict {
   existingId?: string | undefined;
 }
 
-// --- Helper Functions --- //
 
-/**
- * Fetches essential IDs and the current semester from a division.
- * @param divisionId The ID of the division.
- * @returns An object with center_id, school_id, batch_id, and current_semester.
- */
-// MODIFIED: This function now fetches the current_semester as well.
 async function getDivisionDetails(divisionId: string): Promise<DivisionDetails> {
   const division = await prisma.division.findUnique({
     where: { id: divisionId },
@@ -80,7 +71,7 @@ async function getDivisionDetails(divisionId: string): Promise<DivisionDetails> 
       center_id: true,
       school_id: true,
       batch_id: true,
-      current_semester: true, // ADDED: Fetch the current semester ID
+      current_semester: true,
     },
   });
 
@@ -88,7 +79,6 @@ async function getDivisionDetails(divisionId: string): Promise<DivisionDetails> 
     throw new AppError("Division not found", 404);
   }
 
-  // ADDED: Ensure the division has a current semester set before adding students.
   if (!division.current_semester) {
     throw new AppError("Cannot add students: The division does not have a current semester assigned.", 400);
   }
@@ -102,28 +92,24 @@ async function getDivisionDetails(divisionId: string): Promise<DivisionDetails> 
 }
 
 
-/**
- * Authorizes if an admin has access to a center's division.
- * @param centerId The center ID to check against.
- * @param role The user's role.
- * @param adminId The user's ID (if an admin).
- */
-async function authorizeDivisionAccess(
-  centerId: string,
-  role: UserRole,
-  adminId: string | undefined
-): Promise<void> {
-  if (role === AuthorRole.SUPER_ADMIN || role === AuthorRole.ADMIN) {
+
+async function authorizeDivisionAccess(role: UserRole): Promise<void> {
+  const allowedRoles: UserRole[] = [
+    AuthorRole.SUPER_ADMIN,
+    AuthorRole.ADMIN,
+    AuthorRole.OPS,
+    AuthorRole.BATCHOPS
+  ];
+
+  if (allowedRoles.includes(role)) {
+    // If the user's role is in the allowed list, grant access immediately.
     return;
   }
+
+  // For any other role, deny access.
   throw new AppError("Your role is not permitted to perform this action", 403);
 }
 
-/**
- * Validates the data for a single student.
- * @param student The student data object.
- * @returns An object indicating if the data is valid and a list of errors.
- */
 function validateStudentData(student: any): { isValid: boolean; errors: ValidationError[] } {
   const errors: ValidationError[] = [];
   const sanitized: Omit<StudentInput, 'gender'> & { gender?: string } = {
@@ -171,11 +157,7 @@ function validateStudentData(student: any): { isValid: boolean; errors: Validati
   return { isValid: errors.length === 0, errors };
 }
 
-/**
- * Checks for duplicate students within the input list and against the database.
- * @param students An array of student data to check.
- * @returns An object containing sets of duplicate indexes and existing conflicts.
- */
+
 async function checkDuplicates(students: StudentInput[]): Promise<{
   duplicateIndexes: Set<number>;
   existingConflicts: ExistingConflict[];
@@ -237,11 +219,7 @@ async function checkDuplicates(students: StudentInput[]): Promise<{
   return { duplicateIndexes, existingConflicts };
 }
 
-/**
- * Sanitizes student data for public response.
- * @param student The raw student object from Prisma.
- * @returns A sanitized student object.
- */
+
 function sanitizeStudentData(student: any): PublicStudentData {
   return {
     id: student.id,
@@ -255,22 +233,13 @@ function sanitizeStudentData(student: any): PublicStudentData {
   };
 }
 
-/**
- * Inserts a batch of students into the database.
- * @param studentsToCreate Array of validated student data.
- * @param divisionId The target division ID.
- * @param divisionDetails Pre-fetched details of the division, including the semester.
- * @returns An array of newly created public student data.
- */
-// MODIFIED: This function now uses the semesterId from divisionDetails.
+
 async function bulkInsertStudents(
   studentsToCreate: StudentInput[],
   divisionId: string,
   divisionDetails: DivisionDetails
 ): Promise<PublicStudentData[]> {
   const allCreatedStudents: PublicStudentData[] = [];
-
-  // The semesterId is now sourced directly from the division's details
   const semesterId = divisionDetails.current_semester!;
 
   try {
@@ -287,7 +256,7 @@ async function bulkInsertStudents(
         center_id: divisionDetails.center_id,
         school_id: divisionDetails.school_id,
         batch_id: divisionDetails.batch_id,
-        semester_id: semesterId, // Use the automatically fetched semester ID
+        semester_id: semesterId,
       }));
 
       const result = await prisma.student.createMany({
@@ -314,19 +283,13 @@ async function bulkInsertStudents(
   }
 }
 
-// --- Controllers --- //
 
-/**
- * @desc    Bulk create students from a JSON array
- * @route   POST /api/students/bulk
- * @access  Private (Super Admin, Admin)
- */
 export const bulkCreateStudents = catchAsync(async (req: Request, res: Response) => {
-  // MODIFIED: semesterId is no longer required from the body.
   const { divisionId, students } = req.body;
-  const { role, id } = req.user!;
+  const { role } = req.user!;
 
-  // MODIFIED: Updated validation check.
+  await authorizeDivisionAccess(role);
+
   if (!divisionId || !Array.isArray(students)) {
     throw new AppError("divisionId and a students array are required", 400);
   }
@@ -334,9 +297,7 @@ export const bulkCreateStudents = catchAsync(async (req: Request, res: Response)
     throw new AppError(`Cannot process more than ${MAX_BATCH_SIZE} students at once`, 400);
   }
 
-  // MODIFIED: divisionDetails now includes the current semester.
   const divisionDetails = await getDivisionDetails(divisionId);
-  await authorizeDivisionAccess(divisionDetails.center_id, role, id);
 
   const validationErrors: ValidationError[] = [];
   const validStudents: StudentInput[] = [];
@@ -380,7 +341,6 @@ export const bulkCreateStudents = catchAsync(async (req: Request, res: Response)
     }
   });
 
-  // MODIFIED: The semesterId is no longer passed here.
   const created = studentsToCreate.length > 0
     ? await bulkInsertStudents(studentsToCreate, divisionId, divisionDetails)
     : [];
@@ -398,24 +358,19 @@ export const bulkCreateStudents = catchAsync(async (req: Request, res: Response)
   return res.status(created.length ? 201 : 400).json(result);
 });
 
-/**
- * @desc    Create students from an uploaded Excel file
- * @route   POST /api/students/upload
- * @access  Private (Super Admin, Admin)
- */
+
 export const createStudentsFromExcel = catchAsync(async (req: Request, res: Response) => {
-  // MODIFIED: semesterId is no longer required from the body.
   const { divisionId } = req.body;
-  const { role, id } = req.user!;
+  const { role } = req.user!;
   const file = req.file;
+
+  await authorizeDivisionAccess(role);
 
   if (!divisionId) throw new AppError("divisionId is required", 400);
   if (!file) throw new AppError("Excel file is required", 400);
   if (file.size > MAX_FILE_SIZE) throw new AppError(`File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB`, 400);
 
-  // MODIFIED: divisionDetails now includes the current semester.
   const divisionDetails = await getDivisionDetails(divisionId);
-  await authorizeDivisionAccess(divisionDetails.center_id, role, id);
 
   const workbook = XLSX.read(file.buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
@@ -480,7 +435,6 @@ export const createStudentsFromExcel = catchAsync(async (req: Request, res: Resp
     }
   });
 
-  // MODIFIED: The semesterId is no longer passed here.
   const created = studentsToCreate.length > 0
     ? await bulkInsertStudents(studentsToCreate, divisionId, divisionDetails)
     : [];
@@ -498,97 +452,226 @@ export const createStudentsFromExcel = catchAsync(async (req: Request, res: Resp
   return res.status(created.length ? 201 : 400).json(result);
 });
 
-// ... (softDeleteStudent, permanentlyDeleteStudent, and cleanupInactiveStudents remain the same) ...
+
+
+export const getAllStudentsByDivision = catchAsync(async (req: Request, res: Response) => {
+  const { divisionId } = req.params;
+  const { role } = req.user!;
+
+  await authorizeDivisionAccess(role);
+
+  if (!divisionId) {
+    throw new AppError("Division ID is required", 400);
+  }
+
+  const students = await prisma.student.findMany({
+    where: {
+      division_id: divisionId
+    },
+    orderBy: {
+      name: 'asc'
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    count: students.length,
+    data: students.map(sanitizeStudentData)
+  });
+});
+
+/**
+ * @desc    Update a student's details
+ * @route   PATCH /api/students/:studentId
+ * @access  Private (Admin roles)
+ */
+export const updateStudent = catchAsync(async (req: Request, res: Response) => {
+  const { studentId } = req.params;
+  const { name, email, gender, phone, enrollment_id } = req.body;
+  const { role } = req.user!;
+
+  await authorizeDivisionAccess(role);
+
+  if (!studentId) {
+    throw new AppError("Student ID is required", 400);
+  }
+
+  // Check if student exists before attempting to update
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  if (!student) {
+    throw new AppError("Student not found", 404);
+  }
+
+  const updateData: { [key: string]: any } = {};
+  const validationErrors: { field: string, message: string }[] = [];
+
+  if (name !== undefined) {
+    if (typeof name !== "string" || name.trim().length === 0) {
+      validationErrors.push({ field: "name", message: "Name is required" });
+    } else {
+      updateData.name = name.trim();
+    }
+  }
+
+  if (email !== undefined) {
+    const trimmedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      validationErrors.push({ field: "email", message: "Invalid email format" });
+    } else {
+      const existing = await prisma.student.findFirst({
+        where: { email: trimmedEmail, NOT: { id: studentId } }
+      });
+      if (existing) {
+        validationErrors.push({ field: "email", message: "Email is already in use" });
+      } else {
+        updateData.email = trimmedEmail;
+      }
+    }
+  }
+
+  if (gender !== undefined) {
+    if (!Object.values(Gender).includes(gender)) {
+      validationErrors.push({ field: "gender", message: "Gender must be either MALE or FEMALE" });
+    } else {
+      updateData.gender = gender;
+    }
+  }
+
+  if (phone !== undefined) {
+    const phoneString = String(phone).trim();
+    const existing = await prisma.student.findFirst({
+      where: { phone: phoneString, NOT: { id: studentId } }
+    });
+    if (existing) {
+      validationErrors.push({ field: "phone", message: "Phone number is already in use" });
+    } else {
+      updateData.phone = phoneString;
+    }
+  }
+
+  if (enrollment_id !== undefined) {
+    const trimmedEnrollmentId = String(enrollment_id).trim();
+    if (trimmedEnrollmentId.length === 0) {
+      validationErrors.push({ field: "enrollment_id", message: "Enrollment ID cannot be empty" });
+    } else {
+      const existing = await prisma.student.findFirst({
+        where: { enrollment_id: trimmedEnrollmentId, NOT: { id: studentId } }
+      });
+      if (existing) {
+        validationErrors.push({ field: "enrollment_id", message: "Enrollment ID is already in use" });
+      } else {
+        updateData.enrollment_id = trimmedEnrollmentId;
+      }
+    }
+  }
+
+  if (validationErrors.length > 0) {
+    throw new AppError(`Validation failed: ${validationErrors.map(e => e.message).join(', ')}`, 400);
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new AppError("No fields provided to update", 400);
+  }
+
+  const updatedStudent = await prisma.student.update({
+    where: { id: studentId },
+    data: updateData
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Student details updated successfully",
+    data: sanitizeStudentData(updatedStudent)
+  });
+});
+
 
 export const softDeleteStudent = catchAsync(async (req: Request, res: Response) => {
-    const { studentId } = req.params;
-    if (!studentId) {
-      throw new AppError("Student Id required", 400)
+  const { studentId } = req.params;
+  if (!studentId) {
+    throw new AppError("Student Id required", 400);
+  }
+  const { role } = req.user!;
+
+  await authorizeDivisionAccess(role);
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { is_active: true }
+  });
+
+  if (!student) {
+    throw new AppError("Student not found", 404);
+  }
+  if (!student.is_active) {
+    throw new AppError("Student is already deactivated", 400);
+  }
+
+  const updatedStudent = await prisma.student.update({
+    where: { id: studentId },
+    data: {
+      is_active: false,
+      deactivatedAt: new Date()
     }
-    const { role, id } = req.user!;
-  
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      select: { center_id: true, is_active: true }
-    });
-  
-    if (!student) {
-      throw new AppError("Student not found", 404);
-    }
-  
-    await authorizeDivisionAccess(student.center_id, role, id);
-  
-    if (!student.is_active) {
-      throw new AppError("Student is already deactivated", 400);
-    }
-  
-    const updatedStudent = await prisma.student.update({
-      where: { id: studentId },
-      data: {
-        is_active: false,
-        deactivatedAt: new Date()
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Student has been successfully deactivated.",
+    student: sanitizeStudentData(updatedStudent)
+  });
+});
+
+
+export const permanentlyDeleteStudent = catchAsync(async (req: Request, res: Response) => {
+  const { studentId } = req.params;
+  if (!studentId) {
+    throw new AppError("Student Id required", 400);
+  }
+  // The requireRoles middleware in the route already ensures only authorized roles can access this.
+
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  if (!student) {
+    throw new AppError("Student not found", 404);
+  }
+
+  await prisma.student.delete({ where: { id: studentId } });
+
+  res.status(204).send();
+});
+
+
+export async function cleanupInactiveStudents() {
+  console.log('Running scheduled job: cleanupInactiveStudents...');
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const studentsToDelete = await prisma.student.findMany({
+    where: {
+      is_active: false,
+      deactivatedAt: {
+        lt: thirtyDaysAgo
+      }
+    },
+    select: { id: true }
+  });
+
+  if (studentsToDelete.length === 0) {
+    console.log("No students found for cleanup.");
+    return;
+  }
+
+  const idsToDelete = studentsToDelete.map(s => s.id);
+
+  try {
+    const deleteResult = await prisma.student.deleteMany({
+      where: {
+        id: { in: idsToDelete }
       }
     });
-  
-    res.status(200).json({
-      success: true,
-      message: "Student has been successfully deactivated.",
-      student: sanitizeStudentData(updatedStudent)
-    });
-});
-  
-export const permanentlyDeleteStudent = catchAsync(async (req: Request, res: Response) => {
-    const { studentId } = req.params;
-    if (!studentId) {
-      throw new AppError("Student Id required", 400)
-    }
-    const { role } = req.user!;
-  
-    if (role !== AuthorRole.SUPER_ADMIN) {
-      throw new AppError("You do not have permission to permanently delete a student.", 403);
-    }
-  
-    const student = await prisma.student.findUnique({ where: { id: studentId } });
-  
-    if (!student) {
-      throw new AppError("Student not found", 404);
-    }
-  
-    await prisma.student.delete({ where: { id: studentId } });
-  
-    res.status(204).send();
-});
-  
-export async function cleanupInactiveStudents() {
-    console.log('Running scheduled job: cleanupInactiveStudents...');
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  
-    const studentsToDelete = await prisma.student.findMany({
-      where: {
-        is_active: false,
-        deactivatedAt: {
-          lt: thirtyDaysAgo
-        }
-      },
-      select: { id: true }
-    });
-  
-    if (studentsToDelete.length === 0) {
-      console.log("No students found for cleanup.");
-      return;
-    }
-  
-    const idsToDelete = studentsToDelete.map(s => s.id);
-  
-    try {
-      const deleteResult = await prisma.student.deleteMany({
-        where: {
-          id: { in: idsToDelete }
-        }
-      });
-      console.log(`Successfully deleted ${deleteResult.count} inactive students.`);
-    } catch (error) {
-      console.error("Error during scheduled student cleanup:", error);
-    }
+    console.log(`Successfully deleted ${deleteResult.count} inactive students.`);
+  } catch (error) {
+    console.error("Error during scheduled student cleanup:", error);
+  }
 }
