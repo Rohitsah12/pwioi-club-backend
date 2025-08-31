@@ -127,43 +127,43 @@ export const getOps = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateOps = catchAsync(async (req: Request, res: Response) => {
-  const { opsId } = req.params;
-  const validation = updateOpsSchema.safeParse(req.body);
+    const { opsId } = req.params;
+    const validation = updateOpsSchema.safeParse(req.body);
 
-  if (!opsId) throw new AppError("Ops ID is required", 400);
-  if (!validation.success) throw new AppError(`Validation failed: ${validation.error.message}`, 400);
+    if (!opsId) throw new AppError("Ops ID is required", 400);
+    if (!validation.success) throw new AppError(`Validation failed: ${validation.error.message}`, 400);
 
-  const updateData = validation.data;
+    const updateData = validation.data;
 
-  const existingOps = await prisma.admin.findFirst({
-    where: { id: opsId, role: { role: RoleType.OPS } },
-  });
-  if (!existingOps) throw new AppError(`Ops team member with ID ${opsId} not found`, 404);
-
-  if (updateData.email || updateData.phone) {
-    const conflictConditions: any[] = [];
-    if (updateData.email) conflictConditions.push({ email: updateData.email });
-    if (updateData.phone) conflictConditions.push({ phone: updateData.phone });
-
-    const existingAdmin = await prisma.admin.findFirst({
-      where: { AND: [{ id: { not: opsId } }, { OR: conflictConditions }] },
+    const existingOps = await prisma.admin.findFirst({
+        where: { id: opsId, role: { role: RoleType.OPS } },
     });
-    if (existingAdmin) {
-      throw new AppError("An admin with this email or phone number already exists.", 409);
+    if (!existingOps) throw new AppError(`Ops team member with ID ${opsId} not found`, 404);
+
+    if (updateData.email || updateData.phone) {
+        const conflictConditions: any[] = [];
+        if (updateData.email) conflictConditions.push({ email: updateData.email });
+        if (updateData.phone) conflictConditions.push({ phone: updateData.phone });
+
+        const existingAdmin = await prisma.admin.findFirst({
+            where: { AND: [{ id: { not: opsId } }, { OR: conflictConditions }] },
+        });
+        if (existingAdmin) {
+            throw new AppError("An admin with this email or phone number already exists.", 409);
+        }
     }
-  }
 
-  const updatedOpsMember = await prisma.admin.update({
-    where: { id: opsId },
-    data: toPrismaUpdateInput(updateData),
-    select: safeAdminSelect,
-  });
+    const updatedOpsMember = await prisma.admin.update({
+        where: { id: opsId },
+        data: toPrismaUpdateInput(updateData),
+        select: safeAdminSelect,
+    });
 
-  res.status(200).json({
-    success: true,
-    message: "Ops team member updated successfully",
-    data: updatedOpsMember,
-  });
+    res.status(200).json({
+        success: true,
+        message: "Ops team member updated successfully",
+        data: updatedOpsMember,
+    });
 });
 
 export const deleteOps = catchAsync(async (req: Request, res: Response) => {

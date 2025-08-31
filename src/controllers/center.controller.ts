@@ -318,3 +318,29 @@ export const getAllCentersByAdmin = catchAsync(async (
     stats
   });
 });
+
+export const deleteCenter = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+    const { centerId } = req.params;
+
+    if (!centerId) {
+        return next(new AppError("Center ID is required.", 400));
+    }
+
+    const existingCenter = await prisma.center.findUnique({
+        where: { id: centerId },
+    });
+
+    if (!existingCenter) {
+        return next(new AppError("Center not found.", 404));
+    }
+
+    await prisma.center.delete({
+        where: { id: centerId },
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Center deleted successfully.",
+        data: null
+    });
+});
