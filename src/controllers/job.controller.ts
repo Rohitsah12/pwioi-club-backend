@@ -13,7 +13,12 @@ const jobSchema = z.object({
   work_mode: z.nativeEnum(WorkMode),
   type: z.nativeEnum(JobType),
   jd_link: z.string().url("JD link must be a valid URL").optional(),
-  vacancy: z.number().int().positive().optional(),
+
+  vacancy: z.preprocess(
+    (val) => (val === "" ? undefined : val),
+    z.coerce.number().int().positive().optional()
+  ),
+
   eligibility: z.string().optional(),
   description: z.string().optional(),
   closing_date: z.string().datetime("Closing date must be a valid ISO date string").optional(),
