@@ -83,37 +83,37 @@ export const getBatchOps = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const UpdateBatchOps = catchAsync(async (req: Request, res: Response) => {
-  const { batchOpsId } = req.params;
-  if (!batchOpsId) throw new AppError("BatchOps ID is required", 400);
+    const { batchOpsId } = req.params;
+    if (!batchOpsId) throw new AppError("BatchOps ID is required", 400);
 
-  const validation = updateBatchOpsSchema.safeParse(req.body);
-  if (!validation.success) throw new AppError(`Validation failed: ${validation.error.message}`, 400);
+    const validation = updateBatchOpsSchema.safeParse(req.body);
+    if (!validation.success) throw new AppError(`Validation failed: ${validation.error.message}`, 400);
 
-  const updateData = validation.data;
+    const updateData = validation.data;
 
-  const existingBatchOps = await prisma.admin.findFirst({
-    where: { id: batchOpsId, role: { role: RoleType.BATCHOPS } },
-  });
-  if (!existingBatchOps) throw new AppError(`BatchOps team member with ID ${batchOpsId} not found`, 404);
-
-  if (updateData.email || updateData.phone) {
-    const conflictConditions: any[] = [];
-    if (updateData.email) conflictConditions.push({ email: updateData.email });
-    if (updateData.phone) conflictConditions.push({ phone: updateData.phone });
-
-    const existingAdmin = await prisma.admin.findFirst({
-      where: { AND: [{ id: { not: batchOpsId } }, { OR: conflictConditions }] },
+    const existingBatchOps = await prisma.admin.findFirst({
+        where: { id: batchOpsId, role: { role: RoleType.BATCHOPS } },
     });
-    if (existingAdmin) throw new AppError("An admin with this email or phone number already exists.", 409);
-  }
+    if (!existingBatchOps) throw new AppError(`BatchOps team member with ID ${batchOpsId} not found`, 404);
 
-  const updatedBatchOpsMember = await prisma.admin.update({
-    where: { id: batchOpsId },
-    data: toPrismaUpdateInput(updateData),
-    select: safeAdminSelect,
-  });
+    if (updateData.email || updateData.phone) {
+        const conflictConditions: any[] = [];
+        if (updateData.email) conflictConditions.push({ email: updateData.email });
+        if (updateData.phone) conflictConditions.push({ phone: updateData.phone });
 
-  res.status(200).json({ success: true, message: "BatchOps team member updated successfully", data: updatedBatchOpsMember });
+        const existingAdmin = await prisma.admin.findFirst({
+            where: { AND: [{ id: { not: batchOpsId } }, { OR: conflictConditions }] },
+        });
+        if (existingAdmin) throw new AppError("An admin with this email or phone number already exists.", 409);
+    }
+
+    const updatedBatchOpsMember = await prisma.admin.update({
+        where: { id: batchOpsId },
+        data: toPrismaUpdateInput(updateData),
+        select: safeAdminSelect,
+    });
+
+    res.status(200).json({ success: true, message: "BatchOps team member updated successfully", data: updatedBatchOpsMember });
 });
 
 export const deleteBatchOps = catchAsync(async (req: Request, res: Response) => {

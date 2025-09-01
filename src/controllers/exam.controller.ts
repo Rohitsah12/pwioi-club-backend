@@ -510,3 +510,42 @@ export const deleteExam=catchAsync(async (req:Request,res:Response)=>{
 
   res.status(200).json(response);  
 })
+
+export const getAllExamsBySubject = catchAsync(async (req: Request, res: Response) => {
+    const { subjectId } = req.params;
+
+    if (!subjectId) {
+        throw new AppError("Subject ID is required.", 400);
+    }
+
+    const subject = await prisma.subject.findUnique({
+        where: { id: subjectId }
+    });
+
+    if (!subject) {
+        throw new AppError("Subject not found.", 404);
+    }
+
+    const exams = await prisma.exam.findMany({
+        where: {
+            subject_id: subjectId,
+        },
+        orderBy: {
+            exam_date: 'asc'
+        }
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: 'Exams fetched successfully',
+        data: {
+            subject: {
+                id: subject.id,
+                name: subject.name,
+                code: subject.code
+            },
+            exams,
+            count: exams.length,
+        }
+    });
+});

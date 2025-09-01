@@ -290,7 +290,17 @@ export const getAdminById = catchAsync(
         });
     }
 );
-
+const safeAdminSelect = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  linkedin: true,
+  designation: true,
+  createdAt: true,
+  updatedAt: true,
+  role: { select: { role: true } },
+};
 
 export const updateAdmin = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -415,47 +425,13 @@ export const updateAdmin = catchAsync(
         // Get updated admin with relations
         const adminWithRelations = await prisma.admin.findUnique({
             where: { id: adminId },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true,
-                pwId: true,
-                linkedin: true,
-                designation: true,
-                createdAt: true,
-                updatedAt: true,
-                role: {
-                    select: {
-                        id: true,
-                        role: true
-                    }
-                },
-                businessHeadCenters: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        code: true
-                    }
-                },
-                academicHeadCenters: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        code: true
-                    }
-                }
-            }
+            select: safeAdminSelect, // Using a shared select for consistency
         });
 
         return res.status(200).json({
             success: true,
             message: "Admin updated successfully",
-            data: {
-                admin: adminWithRelations
-            }
+            data: adminWithRelations
         });
     }
 );

@@ -249,11 +249,7 @@ export const getSuperAdminById = catchAsync(
     }
 );
 
-/**
- * @desc    Update a super admin
- * @route   PUT /api/superadmins/:superadminId
- * @access  Private (SUPER_ADMIN only)
- */
+
 export const updateSuperAdmin = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
         // Validate params
@@ -322,47 +318,14 @@ export const updateSuperAdmin = catchAsync(
         const updatedSuperAdmin = await prisma.admin.update({
             where: { id: superadminId },
             data: updateData,
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true,
-                pwId: true,
-                linkedin: true,
-                designation: true,
-                createdAt: true,
-                updatedAt: true,
-                role: {
-                    select: {
-                        id: true,
-                        role: true
-                    }
-                },
-                businessHeadCenters: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        code: true
-                    }
-                },
-                academicHeadCenters: {
-                    select: {
-                        id: true,
-                        name: true,
-                        location: true,
-                        code: true
-                    }
-                }
-            }
+            select: safeAdminSelect, // Using a shared select for consistency
         });
 
+        // Corrected Response Structure
         return res.status(200).json({
             success: true,
             message: "Super admin updated successfully",
-            data: {
-                admin: updatedSuperAdmin
-            }
+            data: updatedSuperAdmin
         });
     }
 );
