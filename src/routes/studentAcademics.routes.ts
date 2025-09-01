@@ -10,7 +10,7 @@ studentAcademicsRoutes.get("/leaderboard/division",authenticateJwt,requireRoles(
 studentAcademicsRoutes.get("/leaderboard/overall",authenticateJwt,requireRoles("STUDENT"),getOverallLeaderboard)
 studentAcademicsRoutes.get("/academics/current-semester",authenticateJwt,requireRoles("STUDENT"),getCurrentSemesterDetails)
 studentAcademicsRoutes.get("/academics/past-semesters",authenticateJwt,requireRoles("STUDENT"),getPastSemestersDetails)
-studentAcademicsRoutes.get('/exams/subject/:subjectId/past-exam-types',authenticateJwt,requireRoles("STUDENT"),getExamType)
+studentAcademicsRoutes.get('/exams/subject/:subjectId/past-exam-types',authenticateJwt,getExamType)
 
 
 export default studentAcademicsRoutes
