@@ -630,3 +630,67 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
     }
   });
 });
+
+
+
+export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Request, res: Response) => {
+  const { schoolId } = req.params;
+  const teacherId = req.user!.id; // Get teacher ID from authenticated user
+
+  if (!schoolId) {
+    throw new AppError("School ID is required in the URL.", 400);
+  }
+
+  const today = new Date();
+
+  const ongoingSubjects = await prisma.subject.findMany({
+    where: {
+      teacher_id: teacherId,
+      semester: {
+        division: {
+          school_id: schoolId,
+        },
+        start_date: {
+          lte: today, 
+        },
+        OR: [
+          {
+            end_date: {
+              gte: today,
+            },
+          },
+          {
+            end_date: null,
+          },
+        ],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      credits: true,
+      semester: {
+        select: {
+          id: true,
+          number: true,
+          division: {
+            select: {
+              id: true,
+              code: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      name: 'asc',
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    count: ongoingSubjects.length,
+    data: ongoingSubjects,
+  });
+});

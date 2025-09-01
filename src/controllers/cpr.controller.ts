@@ -10,7 +10,7 @@ const uploadCprSchema = z.object({
   subject_id: z.string().uuid(),
 });
 
-// Interface for the new Excel row format
+
 interface CprRow {
   Module: string;
   Topic: string;
@@ -18,16 +18,178 @@ interface CprRow {
   'Lecture Number': number;
 }
 
-/**
- * Recalculates and updates the planned start and end dates for all CprSubTopics
- * for a given subject based on the current class schedule.
- * This function should be called within a transaction whenever classes are changed.
- */
+
+async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClient | typeof prisma = prisma) {
+  const subject = await tx.subject.findUnique({
+    where: { id: subjectId },
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      teacher: { select: { name: true } }
+    }
+  });
+
+  if (!subject) return null;
+
+  const allSubTopics = await tx.cprSubTopic.findMany({
+    where: { topic: { module: { subject_id: subjectId } } },
+    select: { status: true, lecture_number: true, planned_start_date: true }
+  });
+
+  if (allSubTopics.length === 0) {
+    return {
+      subject,
+      teacher_name: subject.teacher?.name ?? 'Not Assigned',
+      total_modules: 0,
+      total_topics: 0,
+      total_sub_topics: 0,
+      total_lectures: 0,
+      completed_sub_topics: 0,
+      in_progress_sub_topics: 0,
+      pending_sub_topics: 0,
+      completion_percentage: 0,
+      expected_completion_lecture: 0,
+      actual_completion_lecture: 0,
+      completion_lag: 0,
+      has_cpr_data: false, // Flag to indicate no CPR sheet is uploaded
+    };
+  }
+
+  const totalSubTopicsCount = allSubTopics.length;
+  const completedSubTopics = allSubTopics.filter(st => st.status === 'COMPLETED').length;
+  const inProgressSubTopics = allSubTopics.filter(st => st.status === 'IN_PROGRESS').length;
+  const pendingSubTopics = totalSubTopicsCount - completedSubTopics - inProgressSubTopics;
+  const totalLectures = allSubTopics.reduce((max, st) => Math.max(max, st.lecture_number), 0);
+
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  const expectedLectureNumber = allSubTopics
+    .filter(st => st.planned_start_date && new Date(st.planned_start_date) <= today)
+    .reduce((max, st) => Math.max(max, st.lecture_number), 0);
+
+  const subTopicsByLecture = new Map<number, { completed: number; total: number }>();
+  allSubTopics.forEach(subTopic => {
+    const lectureNum = subTopic.lecture_number;
+    if (!subTopicsByLecture.has(lectureNum)) {
+      subTopicsByLecture.set(lectureNum, { completed: 0, total: 0 });
+    }
+    const group = subTopicsByLecture.get(lectureNum)!;
+    group.total++;
+    if (subTopic.status === 'COMPLETED') group.completed++;
+  });
+
+  let actualLectureProgress = 0;
+  const sortedLectures = Array.from(subTopicsByLecture.keys()).sort((a, b) => a - b);
+  sortedLectures.forEach(lectureNum => {
+    const group = subTopicsByLecture.get(lectureNum)!;
+    if (group.total > 0) actualLectureProgress += group.completed / group.total;
+  });
+
+  const completionLag = expectedLectureNumber - actualLectureProgress;
+
+  const moduleCount = await tx.cprModule.count({ where: { subject_id: subjectId } });
+  const topicCount = await tx.cprTopic.count({ where: { module: { subject_id: subjectId } } });
+
+  return {
+    subject,
+    teacher_name: subject.teacher?.name ?? 'Not Assigned',
+    total_modules: moduleCount,
+    total_topics: topicCount,
+    total_sub_topics: totalSubTopicsCount,
+    total_lectures: totalLectures,
+    completed_sub_topics: completedSubTopics,
+    in_progress_sub_topics: inProgressSubTopics,
+    pending_sub_topics: pendingSubTopics,
+    completion_percentage: totalSubTopicsCount > 0 ? Math.round((completedSubTopics / totalSubTopicsCount) * 100) : 0,
+    expected_completion_lecture: expectedLectureNumber,
+    actual_completion_lecture: parseFloat(actualLectureProgress.toFixed(2)),
+    completion_lag: parseFloat(completionLag.toFixed(2)),
+    has_cpr_data: true,
+  };
+}
+
+
+const schoolSummarySchema = z.object({
+  centerId: z.string().uuid(),
+  schoolId: z.string().uuid(),
+});
+
+export const getCprSummaryForSchool = catchAsync(async (req: Request, res: Response) => {
+  const validation = schoolSummarySchema.safeParse(req.query);
+  if (!validation.success) {
+    throw new AppError('Invalid or missing centerId/schoolId.', 400);
+  }
+  const { centerId, schoolId } = validation.data;
+
+  const today = new Date();
+
+  const ongoingSubjects = await prisma.subject.findMany({
+    where: {
+      semester: {
+        start_date: { lte: today },
+        OR: [{ end_date: { gte: today } }, { end_date: null }],
+        division: { school_id: schoolId, center_id: centerId }
+      }
+    },
+    select: { id: true }
+  });
+
+  if (ongoingSubjects.length === 0) {
+    return res.status(200).json({
+      success: true,
+      message: "No ongoing subjects found for the selected school and center.",
+      data: [],
+    });
+  }
+
+  const summaryPromises = ongoingSubjects.map(subject => calculateCprSummary(subject.id));
+  const summaries = (await Promise.all(summaryPromises)).filter(s => s !== null);
+
+  res.status(200).json({
+    success: true,
+    data: summaries,
+  });
+});
+
+
+
+export const getCprBySubject = catchAsync(async (req: Request, res: Response) => {
+  const { subjectId } = req.params;
+
+  const summary = await calculateCprSummary(subjectId!);
+
+  if (!summary) {
+    throw new AppError('Subject not found or CPR data is unavailable.', 404);
+  }
+
+  const cprModules = await prisma.cprModule.findMany({
+    where: { subject_id: subjectId! },
+    orderBy: { order: 'asc' },
+    include: {
+      topics: {
+        orderBy: { order: 'asc' },
+        include: { subTopics: { orderBy: { order: 'asc' } } },
+      },
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      subject: summary.subject,
+      summary,
+      modules: cprModules,
+    },
+  });
+});
+
+
 export async function recalculateCprPlannedDatesForSubject(
   tx: Prisma.TransactionClient,
   subjectId: string
 ) {
-  // 1. Reset all planned dates for the subject's sub-topics
   await tx.cprSubTopic.updateMany({
     where: {
       topic: {
@@ -42,7 +204,6 @@ export async function recalculateCprPlannedDatesForSubject(
     },
   });
 
-  // 2. Find the earliest class start date for each lecture number
   const earliestClassDates = await tx.class.groupBy({
     by: ['lecture_number'],
     where: {
@@ -53,7 +214,6 @@ export async function recalculateCprPlannedDatesForSubject(
     },
   });
 
-  // 3. Update sub-topics with the new planned dates
   for (const group of earliestClassDates) {
     const lectureNumber = parseInt(group.lecture_number, 10);
     const plannedDate = group._min.start_date;
@@ -89,15 +249,13 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
   }
   const { subject_id } = validation.data;
 
-  // 1. Parse the Excel file
   const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
-      throw new AppError('The uploaded Excel file is empty or invalid.', 400);
+    throw new AppError('The uploaded Excel file is empty or invalid.', 400);
   }
   const jsonData = xlsx.utils.sheet_to_json<CprRow>(workbook.Sheets[sheetName]!);
 
-  // 2. Process and structure the data
   const cprData: Map<string, Map<string, { name: string; lecture_number: number }[]>> = new Map();
   for (const row of jsonData) {
     const moduleName = row.Module?.trim();
@@ -107,7 +265,7 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
 
     if (!moduleName || !topicName || !subTopicName || lectureNumber === undefined) {
       console.warn('Skipping invalid row:', row);
-      continue; // Skip rows with missing essential data
+      continue; 
     }
 
     if (!cprData.has(moduleName)) {
@@ -123,12 +281,9 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
     subTopics.push({ name: subTopicName, lecture_number: lectureNumber });
   }
 
-  // 3. Perform database operations in a transaction
   await prisma.$transaction(async (tx) => {
-    // a. Delete all existing CPR data for this subject to ensure a clean slate
     await tx.cprModule.deleteMany({ where: { subject_id } });
 
-    // b. Create the new CPR structure from the parsed data
     let moduleOrder = 1;
     for (const [moduleName, topics] of cprData.entries()) {
       const newModule = await tx.cprModule.create({
@@ -162,8 +317,7 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
         }
       }
     }
-    
-    // c. After creating the new CPR structure, recalculate planned dates based on existing classes
+
     await recalculateCprPlannedDatesForSubject(tx, subject_id);
   });
 
@@ -173,107 +327,32 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
-export const getCprBySubject = catchAsync(async (req: Request, res: Response) => {
+export const deleteCprBySubject = catchAsync(async (req: Request, res: Response) => {
   const { subjectId } = req.params;
 
-  // Validate that the subject exists
   const subject = await prisma.subject.findUnique({
     where: { id: subjectId! },
-    select: { id: true, name: true, code: true }
+    select: { id: true, name: true }
   });
 
   if (!subject) {
     throw new AppError('Subject not found', 404);
   }
 
-  // Fetch the complete CPR structure for the subject
-  const cprModules = await prisma.cprModule.findMany({
-    where: { subject_id: subjectId! },
-    orderBy: { order: 'asc' },
-    include: {
-      topics: {
-        orderBy: { order: 'asc' },
-        include: {
-          subTopics: {
-            orderBy: { order: 'asc' },
-            select: {
-              id: true,
-              name: true,
-              order: true,
-              lecture_number: true, // Select lecture_number
-              status: true,
-              planned_start_date: true,
-              planned_end_date: true,
-              actual_start_date: true,
-              actual_end_date: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          },
-        },
-      },
-    },
+  const moduleCount = await prisma.cprModule.count({
+    where: { subject_id: subjectId! }
   });
 
-  // Calculate summary statistics
-  const allSubTopics = cprModules.flatMap(m => m.topics.flatMap(t => t.subTopics));
-  const totalSubTopics = allSubTopics.length;
-  
-  const completedSubTopics = allSubTopics.filter(st => st.status === 'COMPLETED').length;
-  const inProgressSubTopics = allSubTopics.filter(st => st.status === 'IN_PROGRESS').length;
-  const pendingSubTopics = allSubTopics.filter(st => st.status === 'PENDING').length;
-  
-  // Total lectures is now the highest lecture number defined in the CPR
-  const totalLectures = allSubTopics.reduce((max, st) => Math.max(max, st.lecture_number), 0);
+  if (moduleCount === 0) {
+    throw new AppError('No CPR data found for this subject to delete.', 404);
+  }
 
-  const summary = {
-    total_modules: cprModules.length,
-    total_topics: cprModules.reduce((total, module) => total + module.topics.length, 0),
-    total_sub_topics: totalSubTopics,
-    total_lectures: totalLectures,
-    completed_sub_topics: completedSubTopics,
-    in_progress_sub_topics: inProgressSubTopics,
-    pending_sub_topics: pendingSubTopics,
-    completion_percentage: totalSubTopics > 0 ? Math.round((completedSubTopics / totalSubTopics) * 100) : 0,
-  };
+  await prisma.cprModule.deleteMany({
+    where: { subject_id: subjectId! }
+  });
 
   res.status(200).json({
     success: true,
-    data: {
-      subject,
-      summary,
-      modules: cprModules,
-    },
+    message: `CPR data for subject "${subject.name}" has been successfully deleted.`,
   });
-});
-
-export const deleteCprBySubject = catchAsync(async (req: Request, res: Response) => {
-    const { subjectId } = req.params;
-
-    const subject = await prisma.subject.findUnique({
-        where: { id: subjectId! },
-        select: { id: true, name: true }
-    });
-
-    if (!subject) {
-        throw new AppError('Subject not found', 404);
-    }
-
-    const moduleCount = await prisma.cprModule.count({
-        where: { subject_id: subjectId! }
-    });
-
-    if (moduleCount === 0) {
-        throw new AppError('No CPR data found for this subject to delete.', 404);
-    }
-
-    // Deleting modules will cascade to topics and sub-topics automatically
-    await prisma.cprModule.deleteMany({
-        where: { subject_id: subjectId! }
-    });
-
-    res.status(200).json({
-        success: true,
-        message: `CPR data for subject "${subject.name}" has been successfully deleted.`,
-    });
 });
