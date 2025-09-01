@@ -20,22 +20,16 @@ import {
   addMonths,
 } from 'date-fns';
 
-// Initialize Prisma Client
 const prisma = new PrismaClient();
 
 export class AttendanceAnalyticsService {
-  /**
-   * Main method to fetch and compute attendance analytics.
-   * @param filters - The validated query parameters for filtering data.
-   * @returns A promise resolving to the complete analytics response.
-   */
+
   public static async getAnalytics(
     filters: AttendanceAnalyticsQueryDto
   ): Promise<AttendanceAnalyticsResponse> {
     const studentWhereClause = this.buildStudentWhereClause(filters);
     const attendanceWhereClause = this.buildAttendanceWhereClause(filters);
 
-    // Fetch all required data in parallel to optimize performance
     const [overview, trends] = await Promise.all([
       this.getOverviewStats(studentWhereClause, attendanceWhereClause),
       this.getAttendanceTrends(attendanceWhereClause),
@@ -44,9 +38,7 @@ export class AttendanceAnalyticsService {
     return { overview, trends };
   }
 
-  /**
-   * Calculates overview statistics: total students, average attendance, and yesterday's numbers.
-   */
+ 
   private static async getOverviewStats(
     studentWhere: Prisma.StudentWhereInput,
     attendanceWhere: Prisma.AttendanceWhereInput
@@ -61,15 +53,11 @@ export class AttendanceAnalyticsService {
       presentYesterday,
       absentYesterday,
     ] = await Promise.all([
-      // 1. Total students matching the filter criteria
       prisma.student.count({ where: studentWhere }),
-      // 2. Total present records for all time (for avg attendance)
       prisma.attendance.count({
         where: { ...attendanceWhere, status: 'PRESENT' },
       }),
-      // 3. Total attendance records for all time
       prisma.attendance.count({ where: attendanceWhere }),
-      // 4. Present count for yesterday
       prisma.attendance.count({
         where: {
           ...attendanceWhere,
@@ -77,7 +65,6 @@ export class AttendanceAnalyticsService {
           class: { start_date: { gte: yesterdayStart, lte: yesterdayEnd } },
         },
       }),
-      // 5. Absent count for yesterday
       prisma.attendance.count({
         where: {
           ...attendanceWhere,
@@ -87,7 +74,6 @@ export class AttendanceAnalyticsService {
       }),
     ]);
 
-    // Calculate average, handling division by zero
     const averageAttendance =
       totalAttendanceRecords > 0
         ? (totalPresent / totalAttendanceRecords) * 100
@@ -101,15 +87,12 @@ export class AttendanceAnalyticsService {
     };
   }
 
-  /**
-   * Fetches attendance records for the last 6 months and processes them into daily, weekly, and monthly trends.
-   */
+  
   private static async getAttendanceTrends(
     attendanceWhere: Prisma.AttendanceWhereInput
   ) {
-    const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5)); // Start of the month, 6 months ago
+    const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5)); 
 
-    // Fetch all records needed for trends in a single query
     const attendanceRecords = await prisma.attendance.findMany({
       where: {
         ...attendanceWhere,
@@ -121,19 +104,16 @@ export class AttendanceAnalyticsService {
       },
     });
 
-    // Maps to hold aggregated data { period: { present: number, total: number } }
     const dailyMap = new Map<string, { present: number; total: number }>();
     const weeklyMap = new Map<string, { present: number; total: number }>();
     const monthlyMap = new Map<string, { present: number; total: number }>();
 
-    // Process records
     for (const record of attendanceRecords) {
       const date = record.class.start_date;
       const dailyKey = format(date, 'yyyy-MM-dd');
       const weeklyKey = format(date, 'yyyy-ww'); // Week number
       const monthlyKey = format(date, 'yyyy-MM');
 
-      // Helper to update map
       const updateMap = (
         map: Map<string, { present: number; total: number }>,
         key: string
@@ -151,7 +131,6 @@ export class AttendanceAnalyticsService {
       updateMap(monthlyMap, monthlyKey);
     }
 
-    // Generate final trend arrays, ensuring all periods are present (even with 0%)
     const daily = this.generateTrendLine(dailyMap, 'daily');
     const weekly = this.generateTrendLine(weeklyMap, 'weekly');
     const monthly = this.generateTrendLine(monthlyMap, 'monthly');
@@ -159,9 +138,7 @@ export class AttendanceAnalyticsService {
     return { daily, weekly, monthly };
   }
   
-  /**
-   * Generates a complete trend line for a given period type, filling in missing dates with 0%.
-   */
+
   private static generateTrendLine(
     dataMap: Map<string, { present: number; total: number }>,
     type: 'daily' | 'weekly' | 'monthly'
@@ -212,9 +189,7 @@ export class AttendanceAnalyticsService {
     return trend;
   }
 
-  /**
-   * Dynamically builds the Prisma `where` clause for the Student model.
-   */
+ 
   private static buildStudentWhereClause(
     filters: AttendanceAnalyticsQueryDto
   ): Prisma.StudentWhereInput {
@@ -232,9 +207,7 @@ export class AttendanceAnalyticsService {
     return where;
   }
 
-  /**
-   * Dynamically builds the Prisma `where` clause for the Attendance model.
-   */
+  
   private static buildAttendanceWhereClause(
     filters: AttendanceAnalyticsQueryDto
   ): Prisma.AttendanceWhereInput {
