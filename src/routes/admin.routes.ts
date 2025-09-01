@@ -16,7 +16,7 @@ adminRouter.get('/exam-analytics',authenticateJwt,requireRoles('SUPER_ADMIN', 'A
 
 adminRouter.get('/attendance-analytics',authenticateJwt,requireRoles('SUPER_ADMIN', 'ADMIN', 'BATCHOPS', 'OPS'),getAttendanceAnalyticsAdmin)
 
-adminRouter.post('/create', authenticateJwt,requireRoles('SUPER_ADMIN', 'ADMIN', 'BATCHOPS', 'OPS'),createAdmin);
+adminRouter.post('', authenticateJwt,requireRoles('SUPER_ADMIN', 'ADMIN', 'BATCHOPS', 'OPS'),createAdmin);
 
 
 adminRouter.get('/all',authenticateJwt,requireRoles('SUPER_ADMIN', 'ADMIN', 'BATCHOPS', 'OPS'),getAllAdmin);
