@@ -10,7 +10,6 @@ const uploadCprSchema = z.object({
   subject_id: z.string().uuid(),
 });
 
-
 interface CprRow {
   Module: string;
   Topic: string;
@@ -18,7 +17,7 @@ interface CprRow {
   'Lecture Number': number;
 }
 
-
+// No changes to this function
 async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClient | typeof prisma = prisma) {
   const subject = await tx.subject.findUnique({
     where: { id: subjectId },
@@ -52,7 +51,7 @@ async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClie
       expected_completion_lecture: 0,
       actual_completion_lecture: 0,
       completion_lag: 0,
-      has_cpr_data: false, // Flag to indicate no CPR sheet is uploaded
+      has_cpr_data: false,
     };
   }
 
@@ -110,12 +109,46 @@ async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClie
   };
 }
 
+// No changes to this function
+export async function recalculateCprPlannedDatesForSubject(tx: Prisma.TransactionClient, subjectId: string) {
+  await tx.cprSubTopic.updateMany({
+    where: { topic: { module: { subject_id: subjectId } } },
+    data: { planned_start_date: null, planned_end_date: null },
+  });
+
+  const earliestClassDates = await tx.class.groupBy({
+    by: ['lecture_number'],
+    where: { subject_id: subjectId },
+    _min: { start_date: true },
+  });
+
+  for (const group of earliestClassDates) {
+    const lectureNumber = parseInt(group.lecture_number, 10);
+    const plannedDate = group._min.start_date;
+
+    if (!isNaN(lectureNumber) && plannedDate) {
+      await tx.cprSubTopic.updateMany({
+        where: {
+          lecture_number: lectureNumber,
+          topic: { module: { subject_id: subjectId } },
+        },
+        data: {
+          planned_start_date: plannedDate,
+          planned_end_date: plannedDate,
+        },
+      });
+    }
+  }
+}
 
 const schoolSummarySchema = z.object({
   centerId: z.string().uuid(),
   schoolId: z.string().uuid(),
 });
 
+
+
+// No changes to this handler
 export const getCprSummaryForSchool = catchAsync(async (req: Request, res: Response) => {
   const validation = schoolSummarySchema.safeParse(req.query);
   if (!validation.success) {
@@ -153,17 +186,13 @@ export const getCprSummaryForSchool = catchAsync(async (req: Request, res: Respo
   });
 });
 
-
-
+// No changes to this handler
 export const getCprBySubject = catchAsync(async (req: Request, res: Response) => {
   const { subjectId } = req.params;
-
   const summary = await calculateCprSummary(subjectId!);
-
   if (!summary) {
     throw new AppError('Subject not found or CPR data is unavailable.', 404);
   }
-
   const cprModules = await prisma.cprModule.findMany({
     where: { subject_id: subjectId! },
     orderBy: { order: 'asc' },
@@ -174,7 +203,6 @@ export const getCprBySubject = catchAsync(async (req: Request, res: Response) =>
       },
     },
   });
-
   res.status(200).json({
     success: true,
     data: {
@@ -185,174 +213,122 @@ export const getCprBySubject = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
-
-export async function recalculateCprPlannedDatesForSubject(
-  tx: Prisma.TransactionClient,
-  subjectId: string
-) {
-  await tx.cprSubTopic.updateMany({
-    where: {
-      topic: {
-        module: {
-          subject_id: subjectId,
-        },
-      },
-    },
-    data: {
-      planned_start_date: null,
-      planned_end_date: null,
-    },
+// No changes to this handler
+export const deleteCprBySubject = catchAsync(async (req: Request, res: Response) => {
+  const { subjectId } = req.params;
+  const subject = await prisma.subject.findUnique({
+    where: { id: subjectId! },
+    select: { id: true, name: true }
   });
-
-  const earliestClassDates = await tx.class.groupBy({
-    by: ['lecture_number'],
-    where: {
-      subject_id: subjectId,
-    },
-    _min: {
-      start_date: true,
-    },
-  });
-
-  for (const group of earliestClassDates) {
-    const lectureNumber = parseInt(group.lecture_number, 10);
-    const plannedDate = group._min.start_date;
-
-    if (!isNaN(lectureNumber) && plannedDate) {
-      await tx.cprSubTopic.updateMany({
-        where: {
-          lecture_number: lectureNumber,
-          topic: {
-            module: {
-              subject_id: subjectId,
-            },
-          },
-        },
-        data: {
-          planned_start_date: plannedDate,
-          planned_end_date: plannedDate, // Both dates are the same as it's for a single lecture day
-        },
-      });
-    }
+  if (!subject) {
+    throw new AppError('Subject not found', 404);
   }
-}
+  const moduleCount = await prisma.cprModule.count({
+    where: { subject_id: subjectId! }
+  });
+  if (moduleCount === 0) {
+    throw new AppError('No CPR data found for this subject to delete.', 404);
+  }
+  await prisma.cprModule.deleteMany({
+    where: { subject_id: subjectId! }
+  });
+  res.status(200).json({
+    success: true,
+    message: `CPR data for subject "${subject.name}" has been successfully deleted.`,
+  });
+});
 
-
+// ✨ UPDATED FUNCTION with validation and error logging
 export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => {
+  // --- File and body validation remains the same ---
   if (!req.file) {
     throw new AppError('No Excel file uploaded.', 400);
   }
-
   const validation = uploadCprSchema.safeParse(req.body);
   if (!validation.success) {
     throw new AppError('Invalid subject_id provided.', 400);
   }
   const { subject_id } = validation.data;
 
+  // --- Excel parsing and data validation remains the same ---
   const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     throw new AppError('The uploaded Excel file is empty or invalid.', 400);
   }
   const jsonData = xlsx.utils.sheet_to_json<CprRow>(workbook.Sheets[sheetName]!);
-
   const cprData: Map<string, Map<string, { name: string; lecture_number: number }[]>> = new Map();
+
   for (const row of jsonData) {
     const moduleName = row.Module?.trim();
     const topicName = row.Topic?.trim();
     const subTopicName = row['Sub Topic']?.trim();
     const lectureNumber = row['Lecture Number'];
-
-    if (!moduleName || !topicName || !subTopicName || lectureNumber === undefined) {
-      console.warn('Skipping invalid row:', row);
-      continue; 
+    if (!moduleName || !topicName || !subTopicName || lectureNumber == null || !Number.isInteger(lectureNumber)) {
+      console.warn('Skipping invalid CPR row:', { row, reason: 'Missing required field or invalid lecture number.' });
+      continue;
     }
-
-    if (!cprData.has(moduleName)) {
-      cprData.set(moduleName, new Map());
-    }
+    if (!cprData.has(moduleName)) cprData.set(moduleName, new Map());
     const topics = cprData.get(moduleName)!;
-
-    if (!topics.has(topicName)) {
-      topics.set(topicName, []);
-    }
+    if (!topics.has(topicName)) topics.set(topicName, []);
     const subTopics = topics.get(topicName)!;
-
     subTopics.push({ name: subTopicName, lecture_number: lectureNumber });
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.cprModule.deleteMany({ where: { subject_id } });
+  if (cprData.size === 0) {
+    throw new AppError("The uploaded file contains no valid CPR data after processing.", 400);
+  }
 
-    let moduleOrder = 1;
-    for (const [moduleName, topics] of cprData.entries()) {
-      const newModule = await tx.cprModule.create({
-        data: {
-          name: moduleName,
-          order: moduleOrder++,
-          subject_id: subject_id,
-        },
-      });
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.cprModule.deleteMany({ where: { subject_id } });
 
-      let topicOrder = 1;
-      for (const [topicName, subTopics] of topics.entries()) {
-        const newTopic = await tx.cprTopic.create({
-          data: {
-            name: topicName,
-            order: topicOrder++,
-            module_id: newModule.id,
-          },
-        });
-
-        let subTopicOrder = 1;
-        for (const subTopic of subTopics) {
-          await tx.cprSubTopic.create({
-            data: {
-              name: subTopic.name,
-              order: subTopicOrder++,
-              lecture_number: subTopic.lecture_number, // Use lecture_number
-              topic_id: newTopic.id,
-            },
+        let moduleOrder = 1;
+        for (const [moduleName, topics] of cprData.entries()) {
+          const newModule = await tx.cprModule.create({
+            data: { name: moduleName, order: moduleOrder++, subject_id },
           });
+
+          let topicOrder = 1;
+          for (const [topicName, subTopics] of topics.entries()) {
+            const newTopic = await tx.cprTopic.create({
+              data: { name: topicName, order: topicOrder++, module_id: newModule.id },
+            });
+
+            // ✨ BEST PRACTICE CHANGE HERE ✨
+            // 1. Prepare all sub-topic data for this topic in an array
+            if (subTopics.length > 0) {
+              const subTopicsToCreate = subTopics.map((subTopic, index) => ({
+                name: subTopic.name,
+                order: index + 1, // Order is now relative to the topic
+                lecture_number: subTopic.lecture_number,
+                topic_id: newTopic.id,
+              }));
+
+              // 2. Insert all of them in a single database call
+              await tx.cprSubTopic.createMany({
+                data: subTopicsToCreate,
+              });
+            }
+          }
         }
+        await recalculateCprPlannedDatesForSubject(tx, subject_id);
+      },
+      {
+        // Increase the transaction timeout for this specific operation
+        timeout: 60000, // 60 seconds
       }
-    }
+    );
 
-    await recalculateCprPlannedDatesForSubject(tx, subject_id);
-  });
-
-  res.status(201).json({
-    success: true,
-    message: 'CPR sheet uploaded and processed successfully.',
-  });
-});
-
-export const deleteCprBySubject = catchAsync(async (req: Request, res: Response) => {
-  const { subjectId } = req.params;
-
-  const subject = await prisma.subject.findUnique({
-    where: { id: subjectId! },
-    select: { id: true, name: true }
-  });
-
-  if (!subject) {
-    throw new AppError('Subject not found', 404);
+    res.status(201).json({
+      success: true,
+      message: 'CPR sheet uploaded and processed successfully.',
+    });
+  } catch (error) {
+    console.error("----------- CPR DATABASE TRANSACTION FAILED -----------");
+    console.error(error);
+    console.error("----------- END CPR ERROR -----------");
+    throw new AppError('Database operation failed. Check server logs for details.', 500);
   }
-
-  const moduleCount = await prisma.cprModule.count({
-    where: { subject_id: subjectId! }
-  });
-
-  if (moduleCount === 0) {
-    throw new AppError('No CPR data found for this subject to delete.', 404);
-  }
-
-  await prisma.cprModule.deleteMany({
-    where: { subject_id: subjectId! }
-  });
-
-  res.status(200).json({
-    success: true,
-    message: `CPR data for subject "${subject.name}" has been successfully deleted.`,
-  });
 });
