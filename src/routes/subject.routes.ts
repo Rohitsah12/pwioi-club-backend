@@ -24,7 +24,7 @@ subjectRoutes.delete("/:subjectId", authenticateJwt, requireRoles('SUPER_ADMIN',
 subjectRoutes.get("/semesters/:semesterId", authenticateJwt, requireRoles('SUPER_ADMIN', "ADMIN", "BATCHOPS", "OPS"), getSubjectsBySemester);
 subjectRoutes.get("/teachers/:teacherId", authenticateJwt, requireRoles('SUPER_ADMIN', "ADMIN", "BATCHOPS", "OPS"), getSubjectsByTeacher);
 
-subjectRoutes.get('/:subjectId/students', authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER"), getStudentsForSubject);
+subjectRoutes.get('/:subjectId/students', authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER","ADMIN","BATCHOPS","OPS","SUPER_ADMIN"), getStudentsForSubject);
 
 subjectRoutes.get('/schools/:schoolId/my-ongoing', authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER"), getOngoingSubjectsForTeacherBySchool);
 
