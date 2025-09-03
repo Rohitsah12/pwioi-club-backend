@@ -816,7 +816,7 @@ model Subject {
   name        String
   semester_id String
   credits     Int
-  code        String             @unique
+  code        String            
   teacher_id  String
   createdAt   DateTime           @default(now()) @map("created_at")
   updatedAt   DateTime           @default(now()) @map("updated_at")
