@@ -416,18 +416,6 @@ export const updateSubject = catchAsync(async (req: Request, res: Response) => {
     throw new AppError("Subject not found", 404);
   }
 
-  if (updates.code && updates.code !== existingSubject.code) {
-    const codeExists = await prisma.subject.findUnique({
-      where: { code: updates.code },
-    });
-    if (codeExists) {
-      throw new AppError(
-        `Subject with code '${updates.code}' already exists`,
-        409
-      );
-    }
-  }
-
   const validationPromises: Promise<void>[] = [];
 
   if (updates.semester_id && updates.semester_id !== existingSubject.semester_id) {
