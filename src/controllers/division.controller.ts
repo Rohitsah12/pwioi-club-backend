@@ -7,8 +7,8 @@ import { AuthorRole } from "../types/postApi.js";
 interface CreateDivisionRequest {
     batchId: string;
     code: string;
-    startDate?: string;
-    endDate: string;
+    startDate: string;
+    endDate?: string;
 }
 
 export const createDivision = catchAsync(async (
@@ -16,17 +16,16 @@ export const createDivision = catchAsync(async (
     res: Response
 ) => {
     const { batchId, code, startDate, endDate } = req.body;
-    const { role, id } = req.user!;
+    const { role } = req.user!;
 
-    if (!batchId || !code || !endDate) {
-        throw new AppError("batchId, code, and endDate are required", 400);
+    if (!batchId || !code || !startDate) {
+        throw new AppError("batchId, code, and startDate are required", 400);
     }
 
-    if (startDate && isNaN(Date.parse(startDate))) {
+    if (isNaN(Date.parse(startDate))) {
         throw new AppError("Invalid startDate format", 400);
     }
-
-    if (isNaN(Date.parse(endDate))) {
+    if (endDate && isNaN(Date.parse(endDate))) {
         throw new AppError("Invalid endDate format", 400);
     }
 
@@ -45,14 +44,24 @@ export const createDivision = catchAsync(async (
         throw new AppError("Role not permitted to create division", 403);
     }
 
-    const divisionData = {
+    const divisionData: {
+        batch_id: string;
+        center_id: string;
+        school_id: string;
+        code: string;
+        start_date: Date;
+        end_date?: Date; 
+    } = {
         batch_id: batchId,
         center_id: centerId,
         school_id: schoolId,
         code: code.trim().toUpperCase(),
-        start_date: startDate ? new Date(startDate) : new Date(),
-        end_date: new Date(endDate),
+        start_date: new Date(startDate),
     };
+
+    if (endDate) {
+        divisionData.end_date = new Date(endDate);
+    }
 
     const division = await prisma.division.create({
         data: divisionData,
@@ -64,12 +73,11 @@ export const createDivision = catchAsync(async (
         data: division,
     });
 });
-
 interface UpdateDivisionRequest {
     code?: string;
     start_date?: string;
     end_date?: string;
-    current_semester?: string; // semesterId
+    current_semester?: string; 
     center_id?: string;
     school_id?: string;
 }
