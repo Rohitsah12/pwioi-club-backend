@@ -10,7 +10,7 @@ examRoutes.post("",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","OPS","BAT
 examRoutes.patch("/:examId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","OPS","BATCHOPS"),updateExam)
 examRoutes.delete("/:examId",authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN","OPS","BATCHOPS"),deleteExam)
 
-examRoutes.post('/:examId/upload',authenticateJwt,requireRoles("TEACHER"),upload.single('marksFile'), uploadExamMarks);
+examRoutes.post('/:examId/upload',authenticateJwt,requireRoles("TEACHER","BATCHOPS","ADMIN","SUPER_ADMIN","OPS"),upload.single('marksFile'), uploadExamMarks);
 examRoutes.get('/subject/:subjectId', authenticateJwt, getAllExamsBySubject);
 examRoutes.get('/:subjectId',authenticateJwt,getAllExamByExamType)
 export default examRoutes;
