@@ -11,10 +11,9 @@ const getCookieOptions = () => {
   return {
     httpOnly: true,
     secure: isProduction, 
-    sameSite: 'lax' as const,
+    sameSite: isProduction ? 'none' as const : 'strict' as const,
     maxAge: 60 * 60 * 1000,
     domain: isProduction ? process.env.COOKIE_DOMAIN : undefined,
-    path: '/'
   };
 };
 
