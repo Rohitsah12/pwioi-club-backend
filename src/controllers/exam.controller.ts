@@ -15,7 +15,6 @@ interface ExamMarkRow {
 
 export const uploadExamMarks = async (req: Request, res: Response) => {
   const { examId } = req.params;
-  const teacherId = req.user!.id;
   const overwriteExisting = req.body.overwriteExisting === 'true';
 
   if (!req.file) {
@@ -40,9 +39,7 @@ export const uploadExamMarks = async (req: Request, res: Response) => {
     if (!exam) {
       return res.status(404).json({ success: false, message: 'Exam not found.' });
     }
-    if (exam.subject.teacher_id !== teacherId) {
-      return res.status(403).json({ success: false, message: 'You are not authorized to upload marks for this exam.' });
-    }
+
 
     const eligibleStudents = await prisma.student.findMany({
       where: { division_id: exam.subject.semester.division_id },
@@ -104,7 +101,7 @@ export const uploadExamMarks = async (req: Request, res: Response) => {
         marks_obtained: marksObtained,
         is_present: row.is_present === 'false' || row.is_present === false ? false : true,
         remarks: row.remarks?.toString() || null,
-        graded_by: teacherId,
+        graded_by: req.user!.id,
         graded_at: new Date(),
       };
 

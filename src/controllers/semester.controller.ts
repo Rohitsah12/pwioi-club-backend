@@ -8,7 +8,7 @@ interface CreateSemesterRequest {
     divisionId: string;
     number: number;
     startDate: string;
-    endDate: string;
+    endDate?: string;
 }
 
 export const createSemester = catchAsync(async (
@@ -18,7 +18,7 @@ export const createSemester = catchAsync(async (
     const { divisionId, number, startDate, endDate } = req.body;
     const { role } = req.user!;
 
-    if (!divisionId || !number || !startDate || !endDate) {
+    if (!divisionId || !number || !startDate ) {
         throw new AppError("divisionId, number, startDate and endDate are required", 400);
     }
 
@@ -26,14 +26,14 @@ export const createSemester = catchAsync(async (
         throw new AppError("number must be a positive integer", 400);
     }
 
-    if (isNaN(Date.parse(startDate)) || isNaN(Date.parse(endDate))) {
+    if (isNaN(Date.parse(startDate)) || (endDate && isNaN(Date.parse(endDate)))) {
         throw new AppError("Invalid date format for startDate or endDate", 400);
     }
 
     const start = new Date(startDate);
-    const end = new Date(endDate);
+    const end = endDate ? new Date(endDate) : undefined;
 
-    if (start >= end) {
+    if (end && start >= end) {
         throw new AppError("startDate must be before endDate", 400);
     }
 
@@ -55,7 +55,7 @@ export const createSemester = catchAsync(async (
         throw new AppError("Division start_date and end_date must be defined", 400);
     }
 
-    if (start < division.start_date || end > division.end_date) {
+    if (start < division.start_date || (end && end > division.end_date)) {
         throw new AppError("Semester dates must be within the division's start_date and end_date", 400);
     }
 
@@ -77,7 +77,7 @@ export const createSemester = catchAsync(async (
             division_id: divisionId,
             number,
             start_date: start,
-            end_date: end
+            end_date: end ?? null
         }
     });
 
