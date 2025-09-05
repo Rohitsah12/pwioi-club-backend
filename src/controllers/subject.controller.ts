@@ -619,7 +619,7 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
 
 export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Request, res: Response) => {
   const { schoolId } = req.params;
-  const teacherId = req.user!.id; // Get teacher ID from authenticated user
+  const teacherId = req.user!.id;
 
   if (!schoolId) {
     throw new AppError("School ID is required in the URL.", 400);
@@ -627,7 +627,7 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
 
   const today = new Date();
 
-  const ongoingSubjects = await prisma.subject.findMany({
+  const subjectsWithDetails = await prisma.subject.findMany({
     where: {
       teacher_id: teacherId,
       semester: {
@@ -635,7 +635,7 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
           school_id: schoolId,
         },
         start_date: {
-          lte: today, 
+          lte: today,
         },
         OR: [
           {
@@ -651,7 +651,7 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
     },
     select: {
       id: true,
-      name: true,
+      name: true, 
       code: true,
       credits: true,
       semester: {
@@ -661,7 +661,22 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
           division: {
             select: {
               id: true,
-              code: true,
+              code: true, 
+              batch: {
+                select: {
+                  name: true, 
+                },
+              },
+              school: {
+                select: {
+                  name: true, 
+                },
+              },
+              center: {
+                select: {
+                  code: true, 
+                },
+              },
             },
           },
         },
@@ -672,9 +687,35 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
     },
   });
 
+  const transformedSubjects = subjectsWithDetails.map((subject) => {
+    const division = subject.semester.division;
+
+    const centerCode = division?.center?.code ?? '';
+    const schoolName = division?.school?.name ?? '';
+    const batchName = division?.batch?.name ?? '';
+    const divisionCode = division?.code ?? '';
+    
+    const newSubjectName = `${centerCode}${schoolName}${batchName}${divisionCode}`;
+
+    return {
+      id: subject.id,
+      name: newSubjectName, 
+      code: subject.code,
+      credits: subject.credits,
+      semester: {
+        id: subject.semester.id,
+        number: subject.semester.number,
+        division: {
+          id: division.id,
+          code: division.code,
+        },
+      },
+    };
+  });
+
   res.status(200).json({
     success: true,
-    count: ongoingSubjects.length,
-    data: ongoingSubjects,
+    count: transformedSubjects.length,
+    data: transformedSubjects,
   });
 });
