@@ -17,7 +17,6 @@ interface CprRow {
   'Lecture Number': number;
 }
 
-// No changes to this function
 async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClient | typeof prisma = prisma) {
   const subject = await tx.subject.findUnique({
     where: { id: subjectId },
@@ -25,20 +24,46 @@ async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClie
       id: true,
       name: true,
       code: true,
-      teacher: { select: { name: true } }
-    }
+      teacher: { select: { name: true } },
+      semester: {
+        select: {
+          division: {
+            select: {
+              code: true, 
+              batch: { select: { name: true } }, 
+              school: { select: { name: true } }, 
+              center: { select: { code: true } }, 
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!subject) return null;
+  
+  const division = subject.semester?.division;
+  const centerCode = division?.center?.code ?? '';
+  const schoolName = division?.school?.name ?? '';
+  const batchName = division?.batch?.name ?? '';
+  const divisionCode = division?.code ?? '';
+  const batchcode = `${centerCode}${schoolName}${batchName}${divisionCode}`;
 
   const allSubTopics = await tx.cprSubTopic.findMany({
     where: { topic: { module: { subject_id: subjectId } } },
-    select: { status: true, lecture_number: true, planned_start_date: true }
+    select: { status: true, lecture_number: true, planned_start_date: true },
   });
+
+  const subjectForResponse = {
+    id: subject.id,
+    name: subject.name,
+    code: subject.code,
+  };
 
   if (allSubTopics.length === 0) {
     return {
-      subject,
+      subject: subjectForResponse,
+      batchcode,
       teacher_name: subject.teacher?.name ?? 'Not Assigned',
       total_modules: 0,
       total_topics: 0,
@@ -92,7 +117,8 @@ async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClie
   const topicCount = await tx.cprTopic.count({ where: { module: { subject_id: subjectId } } });
 
   return {
-    subject,
+    subject: subjectForResponse,
+    batchcode,
     teacher_name: subject.teacher?.name ?? 'Not Assigned',
     total_modules: moduleCount,
     total_topics: topicCount,
@@ -109,36 +135,35 @@ async function calculateCprSummary(subjectId: string, tx: Prisma.TransactionClie
   };
 }
 
-// No changes to this function
 export async function recalculateCprPlannedDatesForSubject(tx: Prisma.TransactionClient, subjectId: string) {
-  await tx.cprSubTopic.updateMany({
-    where: { topic: { module: { subject_id: subjectId } } },
-    data: { planned_start_date: null, planned_end_date: null },
-  });
+    await tx.cprSubTopic.updateMany({
+        where: { topic: { module: { subject_id: subjectId } } },
+        data: { planned_start_date: null, planned_end_date: null },
+    });
 
-  const earliestClassDates = await tx.class.groupBy({
-    by: ['lecture_number'],
-    where: { subject_id: subjectId },
-    _min: { start_date: true },
-  });
+    const earliestClassDates = await tx.class.groupBy({
+        by: ['lecture_number'],
+        where: { subject_id: subjectId },
+        _min: { start_date: true },
+    });
 
-  for (const group of earliestClassDates) {
-    const lectureNumber = parseInt(group.lecture_number, 10);
-    const plannedDate = group._min.start_date;
+    for (const group of earliestClassDates) {
+        const lectureNumber = parseInt(group.lecture_number, 10);
+        const plannedDate = group._min.start_date;
 
-    if (!isNaN(lectureNumber) && plannedDate) {
-      await tx.cprSubTopic.updateMany({
-        where: {
-          lecture_number: lectureNumber,
-          topic: { module: { subject_id: subjectId } },
-        },
-        data: {
-          planned_start_date: plannedDate,
-          planned_end_date: plannedDate,
-        },
-      });
+        if (!isNaN(lectureNumber) && plannedDate) {
+            await tx.cprSubTopic.updateMany({
+                where: {
+                    lecture_number: lectureNumber,
+                    topic: { module: { subject_id: subjectId } },
+                },
+                data: {
+                    planned_start_date: plannedDate,
+                    planned_end_date: plannedDate,
+                },
+            });
+        }
     }
-  }
 }
 
 const schoolSummarySchema = z.object({
@@ -146,9 +171,6 @@ const schoolSummarySchema = z.object({
   schoolId: z.string().uuid(),
 });
 
-
-
-// No changes to this handler
 export const getCprSummaryForSchool = catchAsync(async (req: Request, res: Response) => {
   const validation = schoolSummarySchema.safeParse(req.query);
   if (!validation.success) {
@@ -163,16 +185,16 @@ export const getCprSummaryForSchool = catchAsync(async (req: Request, res: Respo
       semester: {
         start_date: { lte: today },
         OR: [{ end_date: { gte: today } }, { end_date: null }],
-        division: { school_id: schoolId, center_id: centerId }
-      }
+        division: { school_id: schoolId, center_id: centerId },
+      },
     },
-    select: { id: true }
+    select: { id: true },
   });
 
   if (ongoingSubjects.length === 0) {
     return res.status(200).json({
       success: true,
-      message: "No ongoing subjects found for the selected school and center.",
+      message: 'No ongoing subjects found for the selected school and center.',
       data: [],
     });
   }
@@ -186,7 +208,6 @@ export const getCprSummaryForSchool = catchAsync(async (req: Request, res: Respo
   });
 });
 
-// No changes to this handler
 export const getCprBySubject = catchAsync(async (req: Request, res: Response) => {
   const { subjectId } = req.params;
   const summary = await calculateCprSummary(subjectId!);
@@ -213,24 +234,23 @@ export const getCprBySubject = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
-// No changes to this handler
 export const deleteCprBySubject = catchAsync(async (req: Request, res: Response) => {
   const { subjectId } = req.params;
   const subject = await prisma.subject.findUnique({
     where: { id: subjectId! },
-    select: { id: true, name: true }
+    select: { id: true, name: true },
   });
   if (!subject) {
     throw new AppError('Subject not found', 404);
   }
   const moduleCount = await prisma.cprModule.count({
-    where: { subject_id: subjectId! }
+    where: { subject_id: subjectId! },
   });
   if (moduleCount === 0) {
     throw new AppError('No CPR data found for this subject to delete.', 404);
   }
   await prisma.cprModule.deleteMany({
-    where: { subject_id: subjectId! }
+    where: { subject_id: subjectId! },
   });
   res.status(200).json({
     success: true,
@@ -238,9 +258,7 @@ export const deleteCprBySubject = catchAsync(async (req: Request, res: Response)
   });
 });
 
-// ✨ UPDATED FUNCTION with validation and error logging
 export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => {
-  // --- File and body validation remains the same ---
   if (!req.file) {
     throw new AppError('No Excel file uploaded.', 400);
   }
@@ -250,7 +268,6 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
   }
   const { subject_id } = validation.data;
 
-  // --- Excel parsing and data validation remains the same ---
   const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
@@ -276,7 +293,7 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
   }
 
   if (cprData.size === 0) {
-    throw new AppError("The uploaded file contains no valid CPR data after processing.", 400);
+    throw new AppError('The uploaded file contains no valid CPR data after processing.', 400);
   }
 
   try {
@@ -296,17 +313,14 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
               data: { name: topicName, order: topicOrder++, module_id: newModule.id },
             });
 
-            // ✨ BEST PRACTICE CHANGE HERE ✨
-            // 1. Prepare all sub-topic data for this topic in an array
             if (subTopics.length > 0) {
               const subTopicsToCreate = subTopics.map((subTopic, index) => ({
                 name: subTopic.name,
-                order: index + 1, // Order is now relative to the topic
+                order: index + 1,
                 lecture_number: subTopic.lecture_number,
                 topic_id: newTopic.id,
               }));
 
-              // 2. Insert all of them in a single database call
               await tx.cprSubTopic.createMany({
                 data: subTopicsToCreate,
               });
@@ -316,7 +330,6 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
         await recalculateCprPlannedDatesForSubject(tx, subject_id);
       },
       {
-        // Increase the transaction timeout for this specific operation
         timeout: 60000, // 60 seconds
       }
     );
@@ -326,9 +339,9 @@ export const uploadCprSheet = catchAsync(async (req: Request, res: Response) => 
       message: 'CPR sheet uploaded and processed successfully.',
     });
   } catch (error) {
-    console.error("----------- CPR DATABASE TRANSACTION FAILED -----------");
+    console.error('----------- CPR DATABASE TRANSACTION FAILED -----------');
     console.error(error);
-    console.error("----------- END CPR ERROR -----------");
+    console.error('----------- END CPR ERROR -----------');
     throw new AppError('Database operation failed. Check server logs for details.', 500);
   }
 });
