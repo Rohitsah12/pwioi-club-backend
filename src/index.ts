@@ -87,6 +87,10 @@ app.get("/health", (req, res) => {
     res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
+app.get("/", (req, res) => {
+    res.status(200).json({success: true, message: "Server running!!!"});
+});
+
 app.use(globalErrorHandler);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
