@@ -309,31 +309,108 @@ export const deleteClass = catchAsync(async (req: Request, res: Response) => {
     res.status(204).send();
 });
 
-/**
- * Retrieves a list of classes based on query filters.
- */
+
 export const getClasses = catchAsync(async (req: Request, res: Response) => {
-    const { subject_id, teacher_id, division_id, room_id, start_date, end_date } = req.query;
+    const { 
+        centerId,
+        schoolId,
+        batchId,
+        divisionId,
+        semesterId,
+        start_date, 
+        end_date
+    } = req.query;
 
     const whereClause: any = {};
-    if (subject_id) whereClause.subject_id = subject_id as string;
-    if (teacher_id) whereClause.teacher_id = teacher_id as string;
-    if (division_id) whereClause.division_id = division_id as string;
-    if (room_id) whereClause.room_id = room_id as string;
+
+    if (divisionId) {
+        whereClause.division_id = divisionId as string;
+        
+        // Additional validation through division relationship
+        whereClause.division = {};
+        
+        if (centerId) {
+            whereClause.division.center_id = centerId as string;
+        }
+        
+        if (schoolId) {
+            whereClause.division.school_id = schoolId as string;
+        }
+        
+        if (batchId) {
+            whereClause.division.batch_id = batchId as string;
+        }
+    }
+
+    if (semesterId) {
+        whereClause.subject = {
+            semester_id: semesterId as string
+        };
+    }
 
     if (start_date || end_date) {
         whereClause.start_date = {};
-        if (start_date) whereClause.start_date.gte = new Date(start_date as string);
-        if (end_date) whereClause.start_date.lte = new Date(end_date as string);
+        if (start_date) {
+            whereClause.start_date.gte = new Date(start_date as string);
+        }
+        if (end_date) {
+            whereClause.start_date.lte = new Date(end_date as string);
+        }
     }
 
     const classes = await prisma.class.findMany({
         where: whereClause,
         include: {
-            subject: { select: { name: true, code: true } },
-            teacher: { select: { name: true, email: true } },
-            division: { select: { code: true } },
-            room: { select: { name: true } },
+            subject: { 
+                select: { 
+                    name: true, 
+                    code: true, 
+                    credits: true,
+                    semester: {
+                        select: {
+                            number: true,
+                            id: true
+                        }
+                    }
+                } 
+            },
+            teacher: { 
+                select: { 
+                    name: true, 
+                    email: true,
+                    id: true
+                } 
+            },
+            division: { 
+                select: { 
+                    code: true,
+                    id: true,
+                    center: {
+                        select: {
+                            name: true,
+                            id: true
+                        }
+                    },
+                    school: {
+                        select: {
+                            name: true,
+                            id: true
+                        }
+                    },
+                    batch: {
+                        select: {
+                            name: true,
+                            id: true
+                        }
+                    }
+                } 
+            },
+            room: { 
+                select: { 
+                    name: true,
+                    id: true
+                } 
+            },
         },
         orderBy: { start_date: 'asc' },
     });
@@ -342,12 +419,19 @@ export const getClasses = catchAsync(async (req: Request, res: Response) => {
         success: true,
         data: classes,
         count: classes.length,
+        filters: {
+            centerId,
+            schoolId,
+            batchId,
+            divisionId,
+            semesterId,
+            start_date,
+            end_date
+        }
     });
 });
 
-/**
- * Retrieves details for a single class.
- */
+
 export const getClass = catchAsync(async (req: Request, res: Response) => {
     const { classId } = req.params;
 
