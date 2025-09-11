@@ -254,8 +254,10 @@ model Contest {
   endTime           DateTime           @default(now()) @map("end_time")
   createdBy         String             @map("created_by")
   isOpen            Boolean            @default(false) @map("is_open")
+  isPublished       Boolean            @default(false) @map("is_published")//change
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
+  subjectId        String?            @map("subject_id")//change
   allowedLanguages  AllowedLanguage[]
   batchContests     BatchContest[]
   creator           Teacher            @relation(fields: [createdBy], references: [id], onDelete: Cascade)
@@ -263,6 +265,7 @@ model Contest {
   contestProblems   ContestProblem[]
   tags              ContestTag[]
   submissions       Submission[]
+  subject          Subject?           @relation(fields: [subjectId], references: [id])//change
 
   @@index([createdBy])
   @@index([startTime])
@@ -334,7 +337,7 @@ model ContestProblem {
   id        String   @id @default(cuid())
   contestId String   @map("contest_id")
   problemId String   @map("problem_id")
-  points    Int      @default(100)
+  point     Int      @default(1)//change
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
@@ -346,13 +349,6 @@ model ContestProblem {
   @@map("contest_problem")
 }
 
-model SubmissionStatus {
-  id   String @id @default(cuid())
-  name String @db.VarChar(200)
-
-  @@index([name])
-  @@map("submission_status")
-}
 
 model Submission {
   id                String              @id @default(cuid())
@@ -365,6 +361,7 @@ model Submission {
   executionTime     Float?              @map("execution_time")
   memoryUsed        Float?              @map("memory_used")
   submittedAt       DateTime            @default(now()) @map("submitted_at")
+  score             Float?              @default(0) //change
   contest           Contest?            @relation(fields: [contestId], references: [id], onDelete: Cascade)
   language          ProgrammingLanguage @relation(fields: [languageId], references: [id], onDelete: Cascade)
   problem           Problem             @relation(fields: [problemId], references: [id], onDelete: Cascade)
@@ -825,7 +822,8 @@ model Subject {
   examMarks   StudentExamMarks[]
   semester    Semester           @relation(fields: [semester_id], references: [id], onDelete: Cascade)
   teacher     Teacher            @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
-  cprModules CprModule[]         
+  cprModules CprModule[]  
+  contests     Contest[]               
 
   @@index([semester_id], map: "subject_semester_id_idx")
   @@index([teacher_id], map: "subject_teacher_id_idx")
