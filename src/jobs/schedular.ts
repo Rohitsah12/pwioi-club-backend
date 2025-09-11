@@ -4,9 +4,9 @@ import { sendAdminWeeklyCprReport } from './adminCpr.job.js';
 
 console.log("Scheduler is initializing...");
 
-cron.schedule('0 19 * * *', async () => {
+cron.schedule('0 17 * * *', async () => {
     console.log('-------------------------------------');
-    console.log('Triggering the daily CPR reminder job (7:00 PM IST)...');
+    console.log('Triggering the daily CPR reminder job (5:00 PM IST)...');
     try {
         await sendCprReminders();
     } catch (error) {
