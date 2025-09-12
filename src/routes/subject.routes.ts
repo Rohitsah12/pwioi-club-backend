@@ -10,12 +10,13 @@ import {
     getSubjectsByTeacher, 
     getSubjectStatistics, 
     updateSubject,
-    getOngoingSubjectsForTeacherBySchool // Import the new controller
+    getMyOngoingSubjects
 } from "../controllers/subject.controller.js";
 
 const subjectRoutes = Router();
 
 subjectRoutes.post("", authenticateJwt, requireRoles('SUPER_ADMIN', "ADMIN", "BATCHOPS", "OPS"), createSubject);
+subjectRoutes.get('/my-ongoing', authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER"), getMyOngoingSubjects);
 subjectRoutes.get("", authenticateJwt, requireRoles('SUPER_ADMIN', "ADMIN", "BATCHOPS", "OPS"), getAllSubjects);
 subjectRoutes.get("/statistics", authenticateJwt, requireRoles('SUPER_ADMIN', "ADMIN", "BATCHOPS", "OPS"), getSubjectStatistics);
 subjectRoutes.get("/:subjectId", authenticateJwt, requireRoles('SUPER_ADMIN', "ADMIN", "BATCHOPS", "OPS"), getSubjectById);
@@ -26,6 +27,5 @@ subjectRoutes.get("/teachers/:teacherId", authenticateJwt, requireRoles('SUPER_A
 
 subjectRoutes.get('/:subjectId/students', authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER","ADMIN","BATCHOPS","OPS","SUPER_ADMIN"), getStudentsForSubject);
 
-subjectRoutes.get('/schools/:schoolId/my-ongoing', authenticateJwt, requireRoles("TEACHER", "ASSISTANT_TEACHER"), getOngoingSubjectsForTeacherBySchool);
 
 export default subjectRoutes;

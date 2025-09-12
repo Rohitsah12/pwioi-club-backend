@@ -1,20 +1,15 @@
-// src/jobs/adminWeeklyReport.job.ts
-
 import { prisma } from "../db/prisma.js";
 import { sendEmail } from "../service/email.service.js";
 import { calculateCprSummaryForSubject } from "../service/cpr.service.js";
-import type { CprModule, Subject } from "@prisma/client";
+import type { CprModule } from "@prisma/client";
 
-// Define a more specific type for the data we fetch
 interface CprModuleWithTopics extends CprModule {
   topics: {
     subTopics: any[]
   }[];
 }
 
-/**
- * Main function to generate and send the weekly CPR report to admins.
- */
+
 export async function sendAdminWeeklyCprReport() {
   console.log("Starting Admin Weekly CPR Report job...");
 
@@ -30,8 +25,6 @@ export async function sendAdminWeeklyCprReport() {
     return;
   }
 
-  // --- PERFORMANCE REFACTOR ---
-  // Fetch all required data in a single, efficient query.
   const today = new Date();
   const allOngoingSubjects = await prisma.subject.findMany({
     where: {
@@ -53,8 +46,11 @@ export async function sendAdminWeeklyCprReport() {
         include: {
           division: {
             include: {
+              batch: true,
               school: {
-                include: { center: true }
+                include: {
+                  center: true
+                }
               }
             }
           }
@@ -67,12 +63,10 @@ export async function sendAdminWeeklyCprReport() {
     console.log("No ongoing subjects found to report.");
     return;
   }
-  
-  // Transform the flat list of subjects into a nested structure for the report
-  const reportData = transformSubjectsToReportData(allOngoingSubjects);
 
+  const reportData = transformSubjectsToReportData(allOngoingSubjects);
   const reportHtml = buildAdminReportHtml(reportData);
-  
+
   await sendEmail({
     to: adminEmailList,
     subject: `Weekly CPR Progress Report - ${today.toLocaleDateString()}`,
@@ -82,31 +76,31 @@ export async function sendAdminWeeklyCprReport() {
   console.log("Admin Weekly CPR Report job finished.");
 }
 
-/**
- * Transforms a flat array of subjects into a nested structure grouped by center and school.
- */
+
 function transformSubjectsToReportData(subjects: any[]) {
     const centersMap = new Map();
-  
+
     for (const subject of subjects) {
       const center = subject.semester.division.school.center;
       const school = subject.semester.division.school;
-  
+
       if (!centersMap.has(center.id)) {
-        centersMap.set(center.id, { name: center.name, schools: new Map() });
+        centersMap.set(center.id, {
+          name: center.name,
+          schools: new Map()
+        });
       }
-  
+
       const centerData = centersMap.get(center.id);
       if (!centerData.schools.has(school.id)) {
         centerData.schools.set(school.id, { name: school.name, subjects: [] });
       }
-  
+
       const schoolData = centerData.schools.get(school.id);
       const summary = calculateCprSummaryForSubject(subject.cprModules as CprModuleWithTopics[], subject);
       schoolData.subjects.push(summary);
     }
-  
-    // Convert maps to arrays for the final report structure
+
     const finalReport: any[] = [];
     for (const center of centersMap.values()) {
       center.schools = Array.from(center.schools.values());
@@ -116,13 +110,11 @@ function transformSubjectsToReportData(subjects: any[]) {
 }
 
 
-/**
- * Builds the HTML for the admin report email.
- */
 function buildAdminReportHtml(data: any[]): string {
   let reportBody = "";
 
   for (const center of data) {
+    // MODIFICATION: Header now only shows the center name
     reportBody += `<h2 style="color: #333; border-bottom: 2px solid #eee; padding-bottom: 5px;">${center.name}</h2>`;
     for (const school of center.schools) {
       reportBody += `<h3 style="color: #555; margin-left: 20px;">${school.name}</h3>`;
@@ -130,9 +122,9 @@ function buildAdminReportHtml(data: any[]): string {
         <thead style="background-color: #f2f2f2;">
           <tr>
             <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Subject (Teacher)</th>
-            <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Expected</th>
-            <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Actual</th>
-            <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Pacing</th>
+            <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Expected Progress (Lec.)</th>
+            <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Actual Progress (Lec.)</th>
+            <th style="padding: 8px; border: 1px solid #ddd; text-align: center;">Pacing Status</th>
           </tr>
         </thead>
         <tbody>`;
@@ -143,19 +135,23 @@ function buildAdminReportHtml(data: any[]): string {
         let lagColor;
 
         if (lag > 1) {
-          pacingText = `${lag.toFixed(1)} behind`;
+          pacingText = `Behind by ${lag.toFixed(1)} lectures`;
           lagColor = '#D32F2F'; // Red
         } else if (lag < -1) {
-          pacingText = `${Math.abs(lag).toFixed(1)} ahead`;
+          pacingText = `Ahead by ${Math.abs(lag).toFixed(1)} lectures`;
           lagColor = '#388E3C'; // Green
         } else {
-          pacingText = 'On track';
+          pacingText = 'On Track';
           lagColor = '#333'; // Black
         }
 
         reportBody += `
           <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;">${subject.subject_name} (${subject.teacher_name})</td>
+            <td style="padding: 8px; border: 1px solid #ddd; line-height: 1.4;">
+                <strong>${subject.subject_name}</strong> (${subject.teacher_name})
+                <br>
+                <small style="color: #555; font-family: monospace;">${subject.division_identifier}</small>
+            </td>
             <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${subject.expected_completion_lecture}</td>
             <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${subject.actual_completion_lecture}</td>
             <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${lagColor};">

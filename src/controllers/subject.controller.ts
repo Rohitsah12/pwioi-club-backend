@@ -617,23 +617,15 @@ export const getSubjectStatistics = catchAsync(async (req: Request, res: Respons
 
 
 
-export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Request, res: Response) => {
-  const { schoolId } = req.params;
+export const getMyOngoingSubjects = catchAsync(async (req: Request, res: Response) => {
   const teacherId = req.user!.id;
-
-  if (!schoolId) {
-    throw new AppError("School ID is required in the URL.", 400);
-  }
-
   const today = new Date();
+
 
   const subjectsWithDetails = await prisma.subject.findMany({
     where: {
       teacher_id: teacherId,
       semester: {
-        division: {
-          school_id: schoolId,
-        },
         start_date: {
           lte: today,
         },
@@ -651,7 +643,7 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
     },
     select: {
       id: true,
-      name: true, 
+      name: true,
       code: true,
       credits: true,
       semester: {
@@ -661,20 +653,20 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
           division: {
             select: {
               id: true,
-              code: true, 
+              code: true,
               batch: {
                 select: {
-                  name: true, 
+                  name: true,
                 },
               },
               school: {
                 select: {
-                  name: true, 
+                  name: true,
                 },
               },
               center: {
                 select: {
-                  code: true, 
+                  code: true,
                 },
               },
             },
@@ -694,12 +686,13 @@ export const getOngoingSubjectsForTeacherBySchool = catchAsync(async (req: Reque
     const schoolName = division?.school?.name ?? '';
     const batchName = division?.batch?.name ?? '';
     const divisionCode = division?.code ?? '';
-    
-    const newSubjectName = `${centerCode}${schoolName}${batchName}${divisionCode}`;
+
+    const detailedName = `${subject.name} (${centerCode}${schoolName}${batchName}${divisionCode})`;
 
     return {
       id: subject.id,
-      name: newSubjectName, 
+      name: detailedName, 
+      originalName: subject.name, 
       code: subject.code,
       credits: subject.credits,
       semester: {
