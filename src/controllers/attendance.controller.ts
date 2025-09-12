@@ -42,7 +42,7 @@ export const getClassesForTeacher = catchAsync(async (req: Request, res: Respons
 
     const formattedClasses = classes.map(c => ({
         id: c.id,
-        displayName: `${c.subject.name} - Lec ${c.lecture_number} - ${c.division.center.code} - ${c.division.school.name} - ${c.division.batch.name} - ${c.division.code}`,
+        displayName: `${c.subject.name} - Lec ${c.lecture_number} - ${c.division.center.code}${c.division.school.name}${c.division.batch.name}${c.division.code}`,
     }));
 
     res.status(200).json({
