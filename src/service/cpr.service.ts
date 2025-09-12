@@ -15,33 +15,12 @@ interface CprModuleWithTopics extends CprModule {
     topics: Topic[];
 }
 
-export async function getOngoingSubjectsForSchool(centerId: string, schoolId: string) {
-    const today = new Date();
-    const subjects = await prisma.subject.findMany({
-        where: {
-            semester: {
-                division: {
-                    center_id: centerId,
-                    school_id: schoolId,
-                },
-                start_date: { lte: today },
-                end_date: { gte: today },
-            },
-        },
-        include: { teacher: true },
-    });
-    return subjects;
-}
-
 export function calculateCprSummaryForSubject(
-    cprModules: CprModuleWithTopics[], 
-    subject: Subject & { teacher: any }
+    cprModules: CprModuleWithTopics[],
+    subject: any // Using 'any' to accommodate the deeply nested relations
 ) {
     const allSubTopics = cprModules.flatMap(m => m.topics.flatMap((t: Topic) => t.subTopics));
-    const totalSubTopics = allSubTopics.length;
-    
-    const completedSubTopics = allSubTopics.filter(st => st.status === 'COMPLETED').length;
-    
+
     const today = new Date();
     today.setHours(23, 59, 59, 999);
 
@@ -70,12 +49,22 @@ export function calculateCprSummaryForSubject(
             actualLectureProgress += group.completed / group.total;
         }
     }
-  
+
     const completionLag = expectedLectureNumber - actualLectureProgress;
 
+    // Extract details to build the identifier string
+    const division = subject.semester.division;
+    const centerCode = division.school.center.code;
+    const schoolName = division.school.name;
+    const batchName = division.batch.name;
+    const divisionCode = division.code;
+
+    const divisionIdentifier = `(${centerCode}${schoolName}${batchName}${divisionCode})`;
+    
     return {
       subject_name: subject.name,
       teacher_name: subject.teacher?.name ?? 'N/A',
+      division_identifier: divisionIdentifier,
       expected_completion_lecture: expectedLectureNumber,
       actual_completion_lecture: parseFloat(actualLectureProgress.toFixed(2)),
       completion_lag: parseFloat(completionLag.toFixed(2)),

@@ -1,9 +1,8 @@
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import 'dotenv/config';
 
-
 const sesClient = new SESClient({
-  region: process.env.AWS_S3_REGION || "ap-south-1"
+  region: process.env.AWS_S3_REGION!,
 });
 
 interface EmailParams {
@@ -13,11 +12,15 @@ interface EmailParams {
 }
 
 export async function sendEmail({ to, subject, htmlBody }: EmailParams) {
-  const senderEmail = process.env.SENDER_EMAIL_ADDRESS;
+  const senderName = process.env.SENDER_NAME!
+  const senderEmail = process.env.SENDER_EMAIL_ADDRESS!
+  
   if (!senderEmail) {
     console.error("SENDER_EMAIL_ADDRESS environment variable is not set.");
     throw new Error("Sender email address is not configured.");
   }
+
+  const sender = `${senderName} <${senderEmail}>`;
 
   const toAddresses = Array.isArray(to) ? to : [to];
 
@@ -27,7 +30,7 @@ export async function sendEmail({ to, subject, htmlBody }: EmailParams) {
   }
 
   const command = new SendEmailCommand({
-    Source: senderEmail,
+    Source: sender, 
     Destination: {
       ToAddresses: toAddresses,
     },
@@ -47,7 +50,7 @@ export async function sendEmail({ to, subject, htmlBody }: EmailParams) {
 
   try {
     const response = await sesClient.send(command);
-    console.log(`Email sent successfully to ${toAddresses.join(', ')}. Message ID: ${response.MessageId}`);
+    console.log(`Email sent successfully to ${toAddresses.join(', ')} from ${sender}. Message ID: ${response.MessageId}`);
     return response;
   } catch (error) {
     console.error(`Failed to send email to ${toAddresses.join(', ')}:`, error);
