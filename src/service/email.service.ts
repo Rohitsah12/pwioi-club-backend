@@ -1,7 +1,10 @@
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import 'dotenv/config';
 
-const sesClient = new SESClient({});
+
+const sesClient = new SESClient({
+  region: process.env.AWS_S3_REGION || "ap-south-1"
+});
 
 interface EmailParams {
   to: string | string[];
