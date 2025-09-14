@@ -30,7 +30,10 @@ export async function sendAdminWeeklyCprReport() {
     where: {
       semester: {
         start_date: { lte: today },
-        end_date: { gte: today },
+        OR: [
+          { end_date: { gte: today } },
+          { end_date: null },
+        ],
       },
     },
     include: {
@@ -78,35 +81,35 @@ export async function sendAdminWeeklyCprReport() {
 
 
 function transformSubjectsToReportData(subjects: any[]) {
-    const centersMap = new Map();
+  const centersMap = new Map();
 
-    for (const subject of subjects) {
-      const center = subject.semester.division.school.center;
-      const school = subject.semester.division.school;
+  for (const subject of subjects) {
+    const center = subject.semester.division.school.center;
+    const school = subject.semester.division.school;
 
-      if (!centersMap.has(center.id)) {
-        centersMap.set(center.id, {
-          name: center.name,
-          schools: new Map()
-        });
-      }
-
-      const centerData = centersMap.get(center.id);
-      if (!centerData.schools.has(school.id)) {
-        centerData.schools.set(school.id, { name: school.name, subjects: [] });
-      }
-
-      const schoolData = centerData.schools.get(school.id);
-      const summary = calculateCprSummaryForSubject(subject.cprModules as CprModuleWithTopics[], subject);
-      schoolData.subjects.push(summary);
+    if (!centersMap.has(center.id)) {
+      centersMap.set(center.id, {
+        name: center.name,
+        schools: new Map()
+      });
     }
 
-    const finalReport: any[] = [];
-    for (const center of centersMap.values()) {
-      center.schools = Array.from(center.schools.values());
-      finalReport.push(center);
+    const centerData = centersMap.get(center.id);
+    if (!centerData.schools.has(school.id)) {
+      centerData.schools.set(school.id, { name: school.name, subjects: [] });
     }
-    return finalReport;
+
+    const schoolData = centerData.schools.get(school.id);
+    const summary = calculateCprSummaryForSubject(subject.cprModules as CprModuleWithTopics[], subject);
+    schoolData.subjects.push(summary);
+  }
+
+  const finalReport: any[] = [];
+  for (const center of centersMap.values()) {
+    center.schools = Array.from(center.schools.values());
+    finalReport.push(center);
+  }
+  return finalReport;
 }
 
 
