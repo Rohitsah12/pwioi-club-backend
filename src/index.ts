@@ -41,11 +41,26 @@ import attendanceRoutes from "./routes/attendance.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
 
-app.use(cors({
-    origin: process.env.ORIGIN,
-    credentials: true
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        console.log(`CORS blocked origin: ${origin}`);
+        console.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  })
+);
 
 app.use(express.json());
 app.use(cookieParser());
@@ -96,4 +111,7 @@ app.get("/", (req, res) => {
 
 app.use(globalErrorHandler);
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
+});

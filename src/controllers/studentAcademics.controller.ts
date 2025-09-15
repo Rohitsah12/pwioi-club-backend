@@ -271,12 +271,14 @@ export const getCurrentSemesterDetails = catchAsync(
       return next(new AppError("Student not found", 404));
     }
 
-    // Find the semester that is currently running based on today's date
     const currentSemester = await prisma.semester.findFirst({
       where: {
         division_id: studentInfo.division_id,
-        start_date: { lte: today }, // Semester has started
-        end_date: { gte: today }    // Semester has not ended yet
+        start_date: { lte: today }, 
+       OR: [
+          { end_date: { gte: today } }, 
+          { end_date: null },          
+       ]   
       },
       include: {
         subjects: {
