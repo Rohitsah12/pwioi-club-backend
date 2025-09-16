@@ -947,7 +947,13 @@ export const getTeacherBasicDetails = catchAsync(async (req: Request, res: Respo
       linkedin: true,
       github_link: true,
       personal_mail: true,
-      about: true
+      about: true,
+      pwId:true,
+      center:{
+        select:{
+          id:true,
+          name:true,
+      }}
     }
   });
 
