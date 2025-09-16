@@ -37,6 +37,7 @@ import cohortRoutes from "./routes/cohort.routes.js";
 import clubRoutes from "./routes/club.routes.js";
 import cprRoutes from "./routes/cpr.routes.js";
 import './jobs/schedular.js';
+import attendanceRoutes from "./routes/attendance.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -97,6 +98,7 @@ app.use("/api/mentor",mentorRoutes)
 app.use("/api/cohort",cohortRoutes)
 app.use("/api/club",clubRoutes)
 app.use("/api/cpr",cprRoutes)
+app.use('/api/attendance',attendanceRoutes);
 
 
 app.get("/health", (req, res) => {
