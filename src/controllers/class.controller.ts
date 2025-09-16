@@ -3,33 +3,16 @@ import { prisma } from '../db/prisma.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
 import { createWeeklyScheduleSchema, updateClassSchema } from '../schema/classSchema.js';
-import { addDays, format, getDay } from 'date-fns';
+import { addDays, format } from 'date-fns';
+import { zonedTimeToUtc, format as formatTz } from 'date-fns-tz';
 import { recalculateCprPlannedDatesForSubject } from './cpr.controller.js';
 import { googleCalendarService } from '../service/googleCalendarService.js';
 
-function parseDateTime(date: Date, time: string): Date {
-    const timeParts = time.split(':');
-    const hours = parseInt(timeParts[0]!, 10);
-    const minutes = parseInt(timeParts[1]!, 10);
-
-    if (isNaN(hours) || isNaN(minutes)) {
-        throw new AppError('Invalid time format', 400);
-    }
-
-    const newDate = new Date(date);
-    newDate.setHours(hours, minutes, 0, 0);
-    return newDate;
+function createUtcDate(date: Date, time: string, timeZone: string): Date {
+    const dateString = formatTz(date, 'yyyy-MM-dd', { timeZone });
+    const fullDateTimeString = `${dateString}T${time}`;
+    return zonedTimeToUtc(fullDateTimeString, timeZone);
 }
-
-const dayNameToIndex: Record<string, number> = {
-    Sunday: 0,
-    Monday: 1,
-    Tuesday: 2,
-    Wednesday: 3,
-    Thursday: 4,
-    Friday: 5,
-    Saturday: 6,
-};
 
 function getDaysInInterval(start: Date, end: Date): Date[] {
     const days: Date[] = [];
@@ -49,6 +32,7 @@ export const createWeeklySchedule = catchAsync(async (req: Request, res: Respons
         throw new AppError(`Validation failed: ${validation.error.issues.map(e => e.message).join(', ')}`, 400);
     }
 
+    const clientTimeZone = 'Asia/Kolkata';
     const { subject_id, room_id, start_date, end_date, schedule_items } = validation.data;
 
     const subject = await prisma.subject.findUnique({
@@ -77,7 +61,6 @@ export const createWeeklySchedule = catchAsync(async (req: Request, res: Respons
     const divisionId = subject.semester.division.id;
     const studentEmails = subject.semester.division.students.map((s) => s.email);
 
-    // ADDED: Check if Google Calendar integration is configured
     const hasCalendarIntegration = !!process.env.GOOGLE_ACADEMICS_REFRESH_TOKEN;
 
     const potentialClasses: Array<{
@@ -88,14 +71,14 @@ export const createWeeklySchedule = catchAsync(async (req: Request, res: Respons
 
     const interval = getDaysInInterval(new Date(start_date), new Date(end_date));
     for (const day of interval) {
-        const dayIndex = getDay(day);
-        const dayName = Object.keys(dayNameToIndex).find((key) => dayNameToIndex[key] === dayIndex);
-        if (!dayName) continue;
+        const dayNameInClientTZ = formatTz(day, 'EEEE', { timeZone: clientTimeZone });
+        const schedulesForDay = schedule_items.filter((item) => item.day_of_week === dayNameInClientTZ);
 
-        const schedulesForDay = schedule_items.filter((item) => item.day_of_week === dayName);
         for (const schedule of schedulesForDay) {
-            const startDateTime = parseDateTime(day, schedule.start_time);
-            const endDateTime = parseDateTime(day, schedule.end_time);
+            const startDateTime = createUtcDate(day, schedule.start_time, clientTimeZone);
+            const endDateTime = createUtcDate(day, schedule.end_time, clientTimeZone);
+
+            if (endDateTime > new Date(end_date)) continue;
 
             potentialClasses.push({
                 start_date: startDateTime,
@@ -155,10 +138,9 @@ export const createWeeklySchedule = catchAsync(async (req: Request, res: Respons
         return createdClassRecords;
     });
 
-    // MODIFIED: Create Google Calendar events only for future classes
     if (hasCalendarIntegration) {
         for (const cls of createdClasses) {
-            if (new Date(cls.start_date) > new Date()) { // Only schedule future events
+            if (new Date(cls.start_date) > new Date()) {
                 try {
                     const calendarEvent = {
                         summary: `${subject.name} - Lecture ${cls.lecture_number}`,
@@ -207,12 +189,29 @@ export const updateClass = catchAsync(async (req: Request, res: Response) => {
     });
 
     if (!existingClass) throw new AppError('Class not found', 404);
-
+    
     const updatePayload: any = {};
-    if (updateData.lecture_number !== undefined) updatePayload.lecture_number = String(updateData.lecture_number);
-    if (updateData.start_date !== undefined) updatePayload.start_date = new Date(updateData.start_date);
-    if (updateData.end_date !== undefined) updatePayload.end_date = new Date(updateData.end_date);
-    if (updateData.room_id !== undefined) updatePayload.room_id = updateData.room_id;
+    if (updateData.lecture_number !== undefined) {
+        updatePayload.lecture_number = String(updateData.lecture_number);
+    }
+    if (updateData.room_id !== undefined) {
+        updatePayload.room_id = updateData.room_id;
+    }
+    if (updateData.start_date !== undefined) {
+        updatePayload.start_date = new Date(updateData.start_date);
+    }
+    if (updateData.end_date !== undefined) {
+        updatePayload.end_date = new Date(updateData.end_date);
+    }
+
+    const requestBody = req.body as any;
+    if (requestBody.start_time && requestBody.end_time) {
+        const clientTimeZone = 'Asia/Kolkata';
+        const classDate = existingClass.start_date;
+        
+        updatePayload.start_date = createUtcDate(classDate, requestBody.start_time, clientTimeZone);
+        updatePayload.end_date = createUtcDate(classDate, requestBody.end_time, clientTimeZone);
+    }
 
     if (Object.keys(updatePayload).length > 0) {
         const newStart = updatePayload.start_date || existingClass.start_date;
@@ -246,14 +245,12 @@ export const updateClass = catchAsync(async (req: Request, res: Response) => {
         return updated;
     });
 
-    // ADDED: Logic to update Google Calendar events conditionally
     const hasCalendarIntegration = !!process.env.GOOGLE_ACADEMICS_REFRESH_TOKEN;
     if (hasCalendarIntegration) {
         const isNowInFuture = new Date(updatedClass.start_date) > new Date();
 
         if (existingClass.googleEventId) {
             if (isNowInFuture) {
-                // Event existed and is still in the future: Update it
                 try {
                     await googleCalendarService.updateCalendarEvent(existingClass.googleEventId, {
                         summary: `${existingClass.subject.name} - Lecture ${updatedClass.lecture_number}`,
@@ -265,7 +262,6 @@ export const updateClass = catchAsync(async (req: Request, res: Response) => {
                     console.error(`❌ Failed to update Google event for class ${updatedClass.id}:`, error);
                 }
             } else {
-                // Event existed but is now in the past: Delete it
                 try {
                     await googleCalendarService.deleteCalendarEvent(existingClass.googleEventId);
                     await prisma.class.update({ where: { id: updatedClass.id }, data: { googleEventId: '' } });
@@ -275,7 +271,6 @@ export const updateClass = catchAsync(async (req: Request, res: Response) => {
                 }
             }
         } else if (isNowInFuture) {
-            // Event did not exist but is now in the future: Create it
             try {
                 const googleEventId = await googleCalendarService.createCalendarEvent({
                     summary: `${existingClass.subject.name} - Lecture ${updatedClass.lecture_number}`,
@@ -285,13 +280,12 @@ export const updateClass = catchAsync(async (req: Request, res: Response) => {
                     attendees: existingClass.division.students.map(s => s.email),
                 });
                 await prisma.class.update({ where: { id: updatedClass.id }, data: { googleEventId } });
-                 console.log(`✅ Successfully created new Google event for updated class ${updatedClass.id}`);
+                console.log(`✅ Successfully created new Google event for updated class ${updatedClass.id}`);
             } catch (error) {
                 console.error(`❌ Failed to create Google event for updated class ${updatedClass.id}:`, error);
             }
         }
     }
-
 
     res.status(200).json({
         success: true,
@@ -310,7 +304,6 @@ export const deleteClass = catchAsync(async (req: Request, res: Response) => {
 
     if (!existingClass) throw new AppError('Class not found', 404);
 
-    // ADDED: Delete Google Calendar event only if it exists and is in the future
     const hasCalendarIntegration = !!process.env.GOOGLE_ACADEMICS_REFRESH_TOKEN;
     if (existingClass.googleEventId && new Date(existingClass.start_date) > new Date() && hasCalendarIntegration) {
         try {
@@ -344,8 +337,6 @@ export const getClasses = catchAsync(async (req: Request, res: Response) => {
 
     if (divisionId) {
         whereClause.division_id = divisionId as string;
-        
-        // Additional validation through division relationship
         whereClause.division = {};
         
         if (centerId) {
@@ -449,7 +440,6 @@ export const getClasses = catchAsync(async (req: Request, res: Response) => {
         }
     });
 });
-
 
 export const getClass = catchAsync(async (req: Request, res: Response) => {
     const { classId } = req.params;
