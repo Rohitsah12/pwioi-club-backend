@@ -706,7 +706,7 @@ export const createOrUpdateAcademicHistory = catchAsync(
     if (xii_education) validateEducationData(xii_education, "Class XII");
 
     async function upsertEducation(
-      educationData: EducationData
+      educationData?: EducationData
     ): Promise<string | null> {
       if (!educationData) return null;
 
@@ -748,22 +748,33 @@ export const createOrUpdateAcademicHistory = catchAsync(
       }
     }
 
-    const ugId = undergraduate ? await upsertEducation(undergraduate) : null;
-    const xId = x_education ? await upsertEducation(x_education) : null;
-    const xiiId = xii_education ? await upsertEducation(xii_education) : null;
+    // Get existing academic history
+    const existingHistory = await prisma.academicHistory.findUnique({
+      where: { student_id: studentId },
+    });
+
+    const updateData: any = {
+      undergraduate: existingHistory?.undergraduate || null,
+      x_education: existingHistory?.x_education || null,
+      xii_education: existingHistory?.xii_education || null,
+    };
+
+    if (undergraduate) {
+      updateData.undergraduate = await upsertEducation(undergraduate);
+    }
+    if (x_education) {
+      updateData.x_education = await upsertEducation(x_education);
+    }
+    if (xii_education) {
+      updateData.xii_education = await upsertEducation(xii_education);
+    }
 
     const academicHistory = await prisma.academicHistory.upsert({
       where: { student_id: studentId },
-      update: {
-        undergraduate: ugId,
-        x_education: xId,
-        xii_education: xiiId,
-      },
+      update: updateData,
       create: {
         student_id: studentId,
-        undergraduate: ugId,
-        x_education: xId,
-        xii_education: xiiId,
+        ...updateData,
       },
     });
 
@@ -783,7 +794,6 @@ export const createOrUpdateAcademicHistory = catchAsync(
     });
   }
 );
-
 export const getAcademicHistory = catchAsync(
   async (req: Request, res: Response) => {
     const { studentId } = req.params;
