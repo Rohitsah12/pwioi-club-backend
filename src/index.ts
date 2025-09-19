@@ -39,6 +39,7 @@ import cprRoutes from "./routes/cpr.routes.js";
 import './jobs/schedular.js';
 import attendanceRoutes from "./routes/attendance.routes.js";
 import dailyAttendanceRoutes from "./routes/dailyAttendance.routes.js";
+import cprDashboardRoutes from "./routes/cprDashboard.routes.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -101,6 +102,7 @@ app.use("/api/club",clubRoutes)
 app.use("/api/cpr",cprRoutes)
 app.use('/api/attendance',attendanceRoutes);
 app.use('/daily-attendance',dailyAttendanceRoutes);
+app.use('/api/cpr-dashboard',cprDashboardRoutes);
 
 app.get("/health", (req, res) => {
     res.json({ status: "OK", timestamp: new Date().toISOString() });
