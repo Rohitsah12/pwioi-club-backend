@@ -8,12 +8,12 @@ const cprDashboardRoutes = Router();
 
 
 
-cprDashboardRoutes.get('/',getCprDashboard); 
-cprDashboardRoutes.get('/school-details',getSchoolCprDetailsByCenter);
-cprDashboardRoutes.get('/lagging-subjects',getLaggingSubjectsAnalysis);
+cprDashboardRoutes.get('/',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN", "OPS", "BATCHOPS"),getCprDashboard); 
+cprDashboardRoutes.get('/school-details',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN", "OPS", "BATCHOPS"),getSchoolCprDetailsByCenter);
+cprDashboardRoutes.get('/lagging-subjects',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN", "OPS", "BATCHOPS"),getLaggingSubjectsAnalysis);
 
-cprDashboardRoutes.get('/division-cpr', getDivisionCprDetails);
-cprDashboardRoutes.get('/division-progress/export', exportDivisionCprToExcel);
-cprDashboardRoutes.get('/division-progress',getDivisionProgressDetails);
+cprDashboardRoutes.get('/division-cpr',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN", "OPS", "BATCHOPS"),getDivisionCprDetails);
+cprDashboardRoutes.get('/division-progress/export',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN", "OPS", "BATCHOPS"),exportDivisionCprToExcel);
+cprDashboardRoutes.get('/division-progress',authenticateJwt,requireRoles("ADMIN","SUPER_ADMIN", "OPS", "BATCHOPS"),getDivisionProgressDetails);
 
 export default cprDashboardRoutes;
