@@ -15,54 +15,48 @@ interface SubjectAttendanceSummary {
 }
 
 interface MonthlyAttendance {
-  month: string; // format: YYYY-MM
+  month: string;
   attended: number;
   totalClasses: number;
 }
 
 interface WeeklyAttendance {
-  weekStart: string|undefined;
-  weekEnd: string|undefined;
+  weekStart: string;
+  weekEnd: string;
   attended: number;
   totalClasses: number;
 }
 
 interface DailyAttendanceEntry {
-  date: string|undefined;
+  date: string;
   status: AttendanceStatus;
+  classCount: number; 
 }
 
-/**
- * Helper to validate UUID params
- */
+
 function validateUUID(value: string, name: string) {
   if (!value || !uuidValidate(value)) throw new AppError(`Invalid or missing ${name}.`, 400);
 }
 
-/**
- * Helper to validate date in YYYY-MM-DD or YYYY-MM format
- */
+
 function validateDateParam(date: string, name: string, pattern: RegExp) {
   if (!date || !pattern.test(date)) throw new AppError(`Invalid or missing ${name}.`, 400);
 }
 
-/**
- * Controller 1: Overall semester-wise attendance summary for student
- * GET /:studentId/attendance?semesterId=SEM_123
- */
+
 export const getOverallSemesterAttendance = catchAsync(async (req: Request, res: Response) => {
   const { studentId } = req.params;
   const semesterId = req.query.semesterId as string;
-  if(!studentId){
-    throw new AppError("Student Id required",400)
+  const now = new Date();
+
+  if (!studentId) {
+    throw new AppError("Student Id required", 400);
   }
 
-  // Validate inputs
   validateUUID(studentId, "studentId");
   if (!semesterId) throw new AppError("semesterId query param is required.", 400);
   validateUUID(semesterId, "semesterId");
 
-  // Check student exists and is active
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     select: { id: true, is_active: true, division_id: true },
@@ -71,7 +65,6 @@ export const getOverallSemesterAttendance = catchAsync(async (req: Request, res:
   if (!student) throw new AppError("Student not found.", 404);
   if (!student.is_active) throw new AppError("Student account is deactivated.", 403);
 
-  // Fetch all subjects in semester
   const semesterSubjects = await prisma.subject.findMany({
     where: { semester_id: semesterId },
     select: { id: true, code: true, name: true },
@@ -82,22 +75,22 @@ export const getOverallSemesterAttendance = catchAsync(async (req: Request, res:
   const subjectWiseAttendance: SubjectAttendanceSummary[] = [];
 
   for (const subject of semesterSubjects) {
-    // Count total classes for subject in semester for the student's division
     const totalForSubject = await prisma.class.count({
       where: {
         subject_id: subject.id,
-        division_id: student.division_id
+        division_id: student.division_id,
+        start_date: { lt: now } 
       }
     });
 
-    // Count attended classes for subject by student
     const attendedForSubject = await prisma.attendance.count({
       where: {
         student_id: studentId,
         status: AttendanceStatus.PRESENT,
         class: {
           subject_id: subject.id,
-          division_id: student.division_id
+          division_id: student.division_id,
+          start_date: { lt: now } 
         }
       }
     });
@@ -134,27 +127,24 @@ export const getOverallSemesterAttendance = catchAsync(async (req: Request, res:
   });
 });
 
-/**
- * Controller 2: Subject-wise attendance summary with breakdown
- * GET /:studentId/attendance/subject/:subjectId?semesterId=SEM_123
- */
+
 export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Response) => {
   const { studentId, subjectId } = req.params;
   const semesterId = req.query.semesterId as string;
-  if(!studentId){
-    throw new AppError("Student Id required",400)
+  const now = new Date();
+
+  if (!studentId) {
+    throw new AppError("Student Id required", 400);
   }
-  if(!subjectId){
-    throw new AppError("Student Id required",400)
+  if (!subjectId) {
+    throw new AppError("Subject Id required", 400);
   }
 
-  // Validate inputs
   validateUUID(studentId, "studentId");
   validateUUID(subjectId, "subjectId");
   if (!semesterId) throw new AppError("semesterId query param is required.", 400);
   validateUUID(semesterId, "semesterId");
 
-  // Check student and subject existence
   const [student, subject] = await Promise.all([
     prisma.student.findUnique({ 
       where: { id: studentId }, 
@@ -170,7 +160,6 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
   if (!student.is_active) throw new AppError("Student account is deactivated", 403);
   if (!subject || subject.semester_id !== semesterId) throw new AppError("Subject not found in semester", 404);
 
-  // Get semester date range
   const semester = await prisma.semester.findUnique({
     where: { id: semesterId },
     select: { start_date: true, end_date: true }
@@ -178,13 +167,13 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
 
   if (!semester) throw new AppError("Semester not found", 404);
 
-  // Total classes for subject/semester/division
   const totalClasses = await prisma.class.count({
     where: {
       subject_id: subjectId,
       division_id: student.division_id,
       start_date: { 
         gte: semester.start_date,
+        lt: now, 
         ...(semester.end_date && { lte: semester.end_date })
       }
     }
@@ -199,6 +188,7 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
         division_id: student.division_id,
         start_date: { 
           gte: semester.start_date,
+          lt: now,
           ...(semester.end_date && { lte: semester.end_date })
         }
       }
@@ -208,20 +198,24 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
   const classesMissed = totalClasses - classesAttended;
   const attendancePercentage = totalClasses === 0 ? 0 : Math.round((classesAttended / totalClasses) * 100);
 
-  // Monthly breakdown (last 6 months)
   const monthlyBreakdown: MonthlyAttendance[] = [];
-  const now = new Date();
+  const semesterStart = new Date(semester.start_date);
+  const currentDate = new Date();
   
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  const startMonth = new Date(semesterStart.getFullYear(), semesterStart.getMonth(), 1);
+  const currentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  
+  for (let d = new Date(startMonth); d <= currentMonth; d.setMonth(d.getMonth() + 1)) {
     const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+    
+    const effectiveMonthEnd = monthEnd > now ? now : monthEnd;
 
     const monthTotal = await prisma.class.count({
       where: {
         subject_id: subjectId,
         division_id: student.division_id,
-        start_date: { gte: monthStart, lte: monthEnd }
+        start_date: { gte: monthStart, lt: effectiveMonthEnd }
       }
     });
 
@@ -232,7 +226,7 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
         class: {
           subject_id: subjectId,
           division_id: student.division_id,
-          start_date: { gte: monthStart, lte: monthEnd }
+          start_date: { gte: monthStart, lt: effectiveMonthEnd }
         }
       }
     });
@@ -244,21 +238,22 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
     });
   }
 
-  // Weekly breakdown (last 4 weeks)
   const weeklyBreakdown: WeeklyAttendance[] = [];
   for (let i = 3; i >= 0; i--) {
     const weekEnd = new Date();
     weekEnd.setDate(weekEnd.getDate() - 7 * i);
-    weekEnd.setHours(23, 59, 59, 999); // End of day
+    weekEnd.setHours(23, 59, 59, 999);
     const weekStart = new Date(weekEnd);
     weekStart.setDate(weekStart.getDate() - 6);
-    weekStart.setHours(0, 0, 0, 0); // Start of day
+    weekStart.setHours(0, 0, 0, 0);
+
+    const effectiveWeekEnd = weekEnd > now ? now : weekEnd;
 
     const weekTotal = await prisma.class.count({
       where: {
         subject_id: subjectId,
         division_id: student.division_id,
-        start_date: { gte: weekStart, lte: weekEnd }
+        start_date: { gte: weekStart, lt: effectiveWeekEnd }
       }
     });
 
@@ -269,54 +264,62 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
         class: {
           subject_id: subjectId,
           division_id: student.division_id,
-          start_date: { gte: weekStart, lte: weekEnd }
+          start_date: { gte: weekStart, lt: effectiveWeekEnd }
         }
       }
     });
 
     weeklyBreakdown.push({
-      weekStart: weekStart.toISOString().split('T')[0],
-      weekEnd: weekEnd.toISOString().split('T')[0],
+      weekStart: weekStart.toISOString().split('T')[0]!,
+      weekEnd: weekEnd.toISOString().split('T')[0]!,
       attended: weekAttended,
       totalClasses: weekTotal
     });
   }
 
-  // Daily status for last 7 days
-  const dailyStatus: { [date: string]: AttendanceStatus } = {};
+  const dailyStatus: { [date: string]: { status: AttendanceStatus; classCount: number } } = {};
+  
   for (let i = 6; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
     date.setHours(0, 0, 0, 0);
     const dateEnd = new Date(date);
     dateEnd.setHours(23, 59, 59, 999);
-    const dateStr:string = date.toISOString().split('T')[0] as string
+    
+    if (date >= now) continue;
+    
+    const dateStr = date.toISOString().split('T')[0];
+    if(!dateStr) continue;
 
-    // Find classes on this date
     const classesOnDate = await prisma.class.findMany({
       where: {
         subject_id: subjectId,
         division_id: student.division_id,
-        start_date: { gte: date, lte: dateEnd }
+        start_date: { gte: date, lte: dateEnd },
+        end_date: { lt: now } 
       },
       select: { id: true }
     });
 
     if (classesOnDate.length === 0) {
-      // No classes scheduled, don't include in daily status
       continue;
     }
 
-    // Check if student attended any class on this date
-    const attendance = await prisma.attendance.findFirst({
+    const attendanceRecords = await prisma.attendance.findMany({
       where: {
         student_id: studentId,
-        class_id: { in: classesOnDate.map(c => c.id) },
-        status: AttendanceStatus.PRESENT
-      }
+        class_id: { in: classesOnDate.map(c => c.id) }
+      },
+      select: { status: true, class_id: true }
     });
 
-    dailyStatus[dateStr] = attendance ? AttendanceStatus.PRESENT : AttendanceStatus.ABSENT;
+    const presentCount = attendanceRecords.filter(a => a.status === AttendanceStatus.PRESENT).length;
+    const totalClassesOnDate = classesOnDate.length;
+
+    dailyStatus[dateStr] = {
+      status: presentCount > 0 ? AttendanceStatus.PRESENT : AttendanceStatus.ABSENT,
+      classCount: totalClassesOnDate
+    };
   }
 
   res.status(200).json({
@@ -337,20 +340,19 @@ export const getSubjectWiseAttendance = catchAsync(async (req: Request, res: Res
   });
 });
 
-/**
- * Controller 3: Month-wise attendance details for subject
- * GET /:studentId/attendance/subject/:subjectId/month/:month (month = YYYY-MM)
- */
+
 export const getSubjectMonthlyAttendance = catchAsync(async (req: Request, res: Response) => {
   const { studentId, subjectId, month } = req.params;
-  if(!studentId){
-    throw new AppError("Student Id required",400)
+  const now = new Date();
+
+  if (!studentId) {
+    throw new AppError("Student Id required", 400);
   }
-  if(!subjectId){
-    throw new AppError("subject Id required",400)
+  if (!subjectId) {
+    throw new AppError("Subject Id required", 400);
   }
-  if(!month){
-    throw new AppError("monthrequired",400)
+  if (!month) {
+    throw new AppError("Month required", 400);
   }
   
   validateUUID(studentId, "studentId");
@@ -369,18 +371,19 @@ export const getSubjectMonthlyAttendance = catchAsync(async (req: Request, res: 
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
   monthEnd.setHours(23, 59, 59, 999);
 
-  // Find all classes in the month for this subject/division
+  const effectiveMonthEnd = monthEnd > now ? now : monthEnd;
+
   const classesInMonth = await prisma.class.findMany({
     where: {
       subject_id: subjectId,
       division_id: student.division_id,
-      start_date: { gte: monthStart, lte: monthEnd }
+      start_date: { gte: monthStart, lte: effectiveMonthEnd },
+      end_date: { lt: now } 
     },
     select: { id: true, start_date: true },
     orderBy: { start_date: 'asc' }
   });
 
-  // Fetch attendance for these class ids
   const classIds = classesInMonth.map(c => c.id);
   const attendanceRecords = await prisma.attendance.findMany({
     where: {
@@ -390,13 +393,29 @@ export const getSubjectMonthlyAttendance = catchAsync(async (req: Request, res: 
     select: { class_id: true, status: true }
   });
 
-  const dailyAttendance: DailyAttendanceEntry[] = classesInMonth.map(c => {
-    const att = attendanceRecords.find(a => a.class_id === c.id);
-    return {
-      date: c.start_date.toISOString().split('T')[0],
-      status: att?.status || AttendanceStatus.ABSENT
-    };
+  const dailyAttendanceMap: { [date: string]: DailyAttendanceEntry } = {};
+
+  classesInMonth.forEach(c => {
+    const dateStr = c.start_date.toISOString().split('T')[0]!;
+    const attendance = attendanceRecords.find(a => a.class_id === c.id);
+    const status = attendance?.status || AttendanceStatus.ABSENT;
+
+    if (!dailyAttendanceMap[dateStr]) {
+      dailyAttendanceMap[dateStr] = {
+        date: dateStr,
+        status: status,
+        classCount: 1
+      };
+    } else {
+      dailyAttendanceMap[dateStr].classCount += 1;
+      if (status === AttendanceStatus.PRESENT) {
+        dailyAttendanceMap[dateStr].status = AttendanceStatus.PRESENT;
+      }
+    }
   });
+
+  const dailyAttendance: DailyAttendanceEntry[] = Object.values(dailyAttendanceMap)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   res.status(200).json({
     success: true,
@@ -408,21 +427,21 @@ export const getSubjectMonthlyAttendance = catchAsync(async (req: Request, res: 
   });
 });
 
-/**
- * Controller 4: Week-wise attendance details for subject
- * GET /:studentId/attendance/subject/:subjectId/week/:week  (week = YYYY-MM-DD format start date)
- */
+
 export const getSubjectWeeklyAttendance = catchAsync(async (req: Request, res: Response) => {
   const { studentId, subjectId, week } = req.params;
-  if(!studentId){
-    throw new AppError("Student Id required",400)
+  const now = new Date();
+
+  if (!studentId) {
+    throw new AppError("Student Id required", 400);
   }
-  if(!subjectId){
-    throw new AppError("SUbject Id required",400)
+  if (!subjectId) {
+    throw new AppError("Subject Id required", 400);
   }
-  if(!week){
-    throw new AppError("Week Start Date required required",400)
+  if (!week) {
+    throw new AppError("Week Start Date required", 400);
   }
+  
   validateUUID(studentId, "studentId");
   validateUUID(subjectId, "subjectId");
   validateDateParam(week, "week", /^\d{4}-\d{2}-\d{2}$/);
@@ -441,11 +460,14 @@ export const getSubjectWeeklyAttendance = catchAsync(async (req: Request, res: R
   weekEnd.setDate(weekEnd.getDate() + 6);
   weekEnd.setHours(23, 59, 59, 999);
 
+  const effectiveWeekEnd = weekEnd > now ? now : weekEnd;
+
   const classesInWeek = await prisma.class.findMany({
     where: {
       subject_id: subjectId,
       division_id: student.division_id,
-      start_date: { gte: weekStart, lte: weekEnd }
+      start_date: { gte: weekStart, lte: effectiveWeekEnd },
+      end_date: { lt: now } 
     },
     select: { id: true, start_date: true },
     orderBy: { start_date: 'asc' }
@@ -460,13 +482,29 @@ export const getSubjectWeeklyAttendance = catchAsync(async (req: Request, res: R
     select: { class_id: true, status: true }
   });
 
-  const dailyAttendance: DailyAttendanceEntry[] = classesInWeek.map(c => {
-    const att = attendanceRecords.find(a => a.class_id === c.id);
-    return {
-      date: c.start_date.toISOString().split('T')[0],
-      status: att?.status || AttendanceStatus.ABSENT
-    };
+  const dailyAttendanceMap: { [date: string]: DailyAttendanceEntry } = {};
+
+  classesInWeek.forEach(c => {
+    const dateStr = c.start_date.toISOString().split('T')[0]!;
+    const attendance = attendanceRecords.find(a => a.class_id === c.id);
+    const status = attendance?.status || AttendanceStatus.ABSENT;
+
+    if (!dailyAttendanceMap[dateStr]) {
+      dailyAttendanceMap[dateStr] = {
+        date: dateStr,
+        status: status,
+        classCount: 1
+      };
+    } else {
+      dailyAttendanceMap[dateStr].classCount += 1;
+      if (status === AttendanceStatus.PRESENT) {
+        dailyAttendanceMap[dateStr].status = AttendanceStatus.PRESENT;
+      }
+    }
   });
+
+  const dailyAttendance: DailyAttendanceEntry[] = Object.values(dailyAttendanceMap)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   res.status(200).json({
     success: true,
@@ -479,20 +517,19 @@ export const getSubjectWeeklyAttendance = catchAsync(async (req: Request, res: R
   });
 });
 
-/**
- * Controller 5: Attendance status on a specific date for subject
- * GET /:studentId/attendance/subject/:subjectId/date/:date  (date = YYYY-MM-DD)
- */
+
 export const getSubjectDailyAttendance = catchAsync(async (req: Request, res: Response) => {
   const { studentId, subjectId, date } = req.params;
-  if(!studentId){
-    throw new AppError("Student Id required",400)
+  const now = new Date();
+
+  if (!studentId) {
+    throw new AppError("Student Id required", 400);
   }
-  if(!date){
-    throw new AppError("Subject Id required",400)
+  if (!subjectId) {
+    throw new AppError("Subject Id required", 400);
   }
-  if(!subjectId){
-    throw new AppError("Date Id required",400)
+  if (!date) {
+    throw new AppError("Date required", 400);
   }
   
   validateUUID(studentId, "studentId");
@@ -512,12 +549,26 @@ export const getSubjectDailyAttendance = catchAsync(async (req: Request, res: Re
   const endDate = new Date(date);
   endDate.setHours(23, 59, 59, 999);
 
-  // Find classes of that subject/division on the given date
+  
+  if (startDate >= now) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        date,
+        subjectId,
+        studentId,
+        status: null,
+        message: "Cannot show attendance for future dates"
+      }
+    });
+  }
+
   const classesOnDate = await prisma.class.findMany({
     where: {
       subject_id: subjectId,
       division_id: student.division_id,
-      start_date: { gte: startDate, lte: endDate }
+      start_date: { gte: startDate, lte: endDate },
+      end_date: { lt: now } 
     },
     select: { id: true }
   });
@@ -529,14 +580,14 @@ export const getSubjectDailyAttendance = catchAsync(async (req: Request, res: Re
         date,
         subjectId,
         studentId,
-        status: null, // No classes scheduled
-        message: "No classes scheduled for this date"
+        status: null,
+        classCount: 0,
+        message: "No completed classes scheduled for this date"
       }
     });
   }
 
-  // Check attendance for student for those classes
-  const attendanceRecord = await prisma.attendance.findFirst({
+  const attendanceRecords = await prisma.attendance.findMany({
     where: {
       student_id: studentId,
       class_id: { in: classesOnDate.map(c => c.id) },
@@ -544,7 +595,10 @@ export const getSubjectDailyAttendance = catchAsync(async (req: Request, res: Re
     select: { status: true }
   });
 
-  const status: AttendanceStatus = attendanceRecord?.status || AttendanceStatus.ABSENT;
+  const presentCount = attendanceRecords.filter(a => a.status === AttendanceStatus.PRESENT).length;
+  const totalClassesOnDate = classesOnDate.length;
+
+  const overallStatus = presentCount > 0 ? AttendanceStatus.PRESENT : AttendanceStatus.ABSENT;
 
   res.status(200).json({
     success: true,
@@ -552,7 +606,14 @@ export const getSubjectDailyAttendance = catchAsync(async (req: Request, res: Re
       date,
       subjectId,
       studentId,
-      status
+      status: overallStatus,
+      classCount: totalClassesOnDate,
+      attendedClasses: presentCount,
+      attendanceDetails: {
+        totalClasses: totalClassesOnDate,
+        attended: presentCount,
+        missed: totalClassesOnDate - presentCount
+      }
     }
   });
 });
