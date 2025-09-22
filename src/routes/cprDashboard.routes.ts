@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticateJwt, requireRoles } from "../middlewares/authMiddleware.js";
-import { exportDivisionCprToExcel, getCprDashboard, getDivisionCprDetails, getDivisionProgressDetails, getLaggingSubjectsAnalysis, getSchoolCprDetailsByCenter } from "../controllers/cprDashboard.controllers.js";
+import { exportDivisionCprToExcel, getCprDashboard, getDivisionCprDetails, getDivisionProgressDetails, getLaggingSubjectsAnalysis, getSchoolCprDetailsByCenter } from "../controllers/cprDashboard.controller.js";
 
 
 const cprDashboardRoutes = Router();
