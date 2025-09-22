@@ -4,12 +4,16 @@ import {
   getSubjectWiseAttendance,
   getSubjectMonthlyAttendance,
   getSubjectWeeklyAttendance,
-  getSubjectDailyAttendance
+  getSubjectDailyAttendance,
+  getAttendanceSubjectWise
 } from "../controllers/studentAttendance.controller.js";
 import { authenticateJwt, requireRoles  } from "../middlewares/authMiddleware.js";
 
 const studentAttendanceRoutes = Router();
 
+
+
+studentAttendanceRoutes.get("/attendance/subject/:subjectId",authenticateJwt,requireRoles("STUDENT"), getAttendanceSubjectWise);
 studentAttendanceRoutes.get(
   "/:studentId/attendance",
   authenticateJwt,
@@ -44,5 +48,6 @@ studentAttendanceRoutes.get(
   requireRoles("STUDENT"),
   getSubjectDailyAttendance
 );
+
 
 export default studentAttendanceRoutes;

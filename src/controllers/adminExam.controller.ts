@@ -9,13 +9,10 @@ export const getExamAnalyticsController = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Validate query parameters
     const validatedQuery: ExamAnalyticsQueryDto = examAnalyticsQuerySchema.parse(req.query);
 
-    // Call the service with validated data
     const analyticsData = await getExamAnalytics(validatedQuery);
 
-    // Send successful response
     res.status(200).json({
       success: true,
       message: `Exam analytics for level '${analyticsData.level}' retrieved successfully.`,
