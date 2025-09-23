@@ -3,7 +3,7 @@ import { prisma } from '../db/prisma.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
 import type { SchoolName } from '@prisma/client';
-import { schoolAnalysisSchema } from '../schema/attendanceDashboard.schema.js';
+import { divisionAnalysisSchema, leaderboardSchema, schoolAnalysisSchema } from '../schema/attendanceDashboard.schema.js';
 
 const initializeSchoolData = () => ({
   totalStudents: 0,
@@ -294,5 +294,353 @@ export const getSchoolAnalysisByDivision = catchAsync(async (req: Request, res: 
   res.status(200).json({
     success: true,
     data: result,
+  });
+});
+
+export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Request, res: Response) => {
+  const validation = divisionAnalysisSchema.safeParse(req.query);
+  if (!validation.success) {
+    const errorMessages = validation.error.issues.map(issue => issue.message).join(', ');
+    throw new AppError(errorMessages, 400);
+  }
+
+  const { divisionId, from, to, threshold } = validation.data;
+  const fromDate = from;
+  const toDate = to || new Date();
+  const now = new Date();
+
+  // 1. Fetch Division, its active semester, and students
+  const division = await prisma.division.findFirst({
+    where: { id: divisionId },
+    select: {
+      currentSemester: {
+        select: {
+          id: true,
+          start_date: true,
+          subjects: {
+            select: {
+              id: true,
+              name: true
+            },
+          },
+        },
+      },
+      students: {
+        where: { is_active: true },
+        select: { id: true }
+      },
+    },
+  });
+
+  if (!division || !division.currentSemester) {
+    throw new AppError(`Division or its current semester not found.`, 404);
+  }
+
+  // 2. NEW VALIDATION: Ensure the 'from' date is not before the semester's start date
+  if (fromDate < division.currentSemester.start_date) {
+    const semStartDate = division.currentSemester.start_date.toISOString().split('T')[0];
+    throw new AppError(`The 'from' date cannot be earlier than the semester start date (${semStartDate}).`, 400);
+  }
+
+  const subjects = division.currentSemester.subjects;
+  const students = division.students;
+  const totalStudentsInDivision = students.length;
+
+  if (totalStudentsInDivision === 0) {
+    return res.status(200).json({
+      success: true,
+      message: "No active students in this division.",
+      data: []
+    });
+  }
+
+  const studentIds = students.map(s => s.id);
+
+  // 3. Process each subject to find the percentage of students below the threshold
+  const analysisData = await Promise.all(
+    subjects.map(async (subject) => {
+      // For each subject, count total classes that have occurred within the date range
+      const totalClassesForSubject = await prisma.class.count({
+        where: {
+          subject_id: subject.id,
+          division_id: divisionId,
+          start_date: {
+            gte: fromDate,
+            lte: toDate,
+            lt: now
+          },
+        },
+      });
+
+      // If no classes have happened, no students can be below threshold
+      if (totalClassesForSubject === 0) {
+        return {
+          subjectId: subject.id,
+          subjectName: subject.name,
+          percentageOfStudentsBelowThreshold: 0,
+          totalClasses: 0,
+          studentsAnalyzed: totalStudentsInDivision
+        };
+      }
+
+      // Find how many classes each student attended for this subject within date range
+      const attendedClassesByStudent = await prisma.attendance.groupBy({
+        by: ['student_id'],
+        where: {
+          student_id: { in: studentIds },
+          status: 'PRESENT',
+          class: {
+            subject_id: subject.id,
+            start_date: {
+              gte: fromDate,
+              lte: toDate,
+              lt: now
+            },
+          },
+        },
+        _count: { id: true },
+      });
+
+      const attendedMap = new Map(
+        attendedClassesByStudent.map(item => [item.student_id, item._count.id])
+      );
+
+      // Count students whose attendance for this subject is below the threshold
+      let studentsBelowThresholdCount = 0;
+      
+      for (const student of students) {
+        const attendedCount = attendedMap.get(student.id) || 0;
+        const studentAttendancePercentage = Math.round((attendedCount / totalClassesForSubject) * 100);
+        
+        if (studentAttendancePercentage < threshold) {
+          studentsBelowThresholdCount++;
+        }
+      }
+
+      // Calculate the final percentage
+      const percentageOfStudentsBelowThreshold = Math.round(
+        (studentsBelowThresholdCount / totalStudentsInDivision) * 100
+      );
+
+      return {
+        subjectId: subject.id,
+        subjectName: subject.name,
+        percentageOfStudentsBelowThreshold,
+        totalClasses: totalClassesForSubject,
+        studentsAnalyzed: totalStudentsInDivision,
+        studentsBelowThreshold: studentsBelowThresholdCount
+      };
+    })
+  );
+
+  res.status(200).json({
+    success: true,
+    data: analysisData,
+    meta: {
+      divisionId,
+      dateRange: {
+        from: fromDate.toISOString().split('T')[0],
+        to: toDate.toISOString().split('T')[0]
+      },
+      threshold,
+      totalStudents: totalStudentsInDivision
+    }
+  });
+});
+
+export const getDivisionAttendanceLeaderboard = catchAsync(async (req: Request, res: Response) => {
+  const validation = leaderboardSchema.safeParse(req.query);
+  if (!validation.success) {
+    const errorMessages = validation.error.issues.map(issue => issue.message).join(', ');
+    throw new AppError(errorMessages, 400);
+  }
+
+  const { divisionId, from, to } = validation.data;
+  const fromDate = from;
+  const toDate = to || new Date();
+  const now = new Date();
+
+  const division = await prisma.division.findFirst({
+    where: { id: divisionId },
+    select: {
+      id: true,
+      code: true,
+      currentSemester: {
+        select: {
+          id: true,
+          start_date: true,
+          end_date: true,
+          number: true
+        },
+      },
+      students: {
+        where: { is_active: true },
+        select: {
+          id: true,
+          name: true,
+          enrollment_id: true,
+          email: true
+        }
+      },
+    },
+  });
+
+  if (!division || !division.currentSemester) {
+    throw new AppError(`Division or its current semester not found.`, 404);
+  }
+
+  if (fromDate < division.currentSemester.start_date) {
+    const semStartDate = division.currentSemester.start_date.toISOString().split('T')[0];
+    throw new AppError(`The 'from' date cannot be earlier than the semester start date (${semStartDate}).`, 400);
+  }
+
+  if (division.currentSemester.end_date && fromDate > division.currentSemester.end_date) {
+    const semEndDate = division.currentSemester.end_date.toISOString().split('T')[0];
+    throw new AppError(`The 'from' date cannot be later than the semester end date (${semEndDate}).`, 400);
+  }
+
+  const students = division.students;
+  const totalStudentsInDivision = students.length;
+
+  if (totalStudentsInDivision === 0) {
+    return res.status(200).json({
+      success: true,
+      message: "No active students in this division.",
+      data: {
+        leaderboard: [],
+        meta: {
+          totalStudents: 0,
+          totalClasses: 0
+        }
+      }
+    });
+  }
+
+  const studentIds = students.map(s => s.id);
+
+  // 3. Get total classes conducted for this division within date range
+  const totalClassesInDateRange = await prisma.class.count({
+    where: {
+      division_id: divisionId,
+      start_date: {
+        gte: fromDate,
+        lte: toDate,
+        lt: now
+      },
+    },
+  });
+
+  if (totalClassesInDateRange === 0) {
+    return res.status(200).json({
+      success: true,
+      message: "No classes conducted in the specified date range.",
+      data: {
+        leaderboard: students.map(student => ({
+          rank: 1,
+          studentId: student.id,
+          studentName: student.name,
+          enrollmentId: student.enrollment_id,
+          email: student.email,
+          attendedClasses: 0,
+          totalClasses: 0,
+          attendancePercentage: 0
+        })),
+        meta: {
+          totalStudents: totalStudentsInDivision,
+          totalClasses: 0,
+          dateRange: {
+            from: fromDate.toISOString().split('T')[0],
+            to: toDate.toISOString().split('T')[0]
+          }
+        }
+      }
+    });
+  }
+
+  // 4. Get attendance data for all students within date range
+  const attendanceData = await prisma.attendance.groupBy({
+    by: ['student_id'],
+    where: {
+      student_id: { in: studentIds },
+      status: 'PRESENT',
+      class: {
+        division_id: divisionId,
+        start_date: {
+          gte: fromDate,
+          lte: toDate,
+          lt: now
+        },
+      },
+    },
+    _count: { id: true },
+  });
+
+  const attendanceMap = new Map(
+    attendanceData.map(item => [item.student_id, item._count.id])
+  );
+
+  // 5. Calculate attendance percentage for each student
+  const studentAttendanceData = students.map(student => {
+    const attendedClasses = attendanceMap.get(student.id) || 0;
+    const attendancePercentage = totalClassesInDateRange > 0 
+      ? Math.round((attendedClasses / totalClassesInDateRange) * 100) 
+      : 0;
+
+    return {
+      studentId: student.id,
+      studentName: student.name,
+      enrollmentId: student.enrollment_id,
+      email: student.email,
+      attendedClasses,
+      totalClasses: totalClassesInDateRange,
+      attendancePercentage
+    };
+  });
+
+  // 6. Sort by attendance percentage (descending) and then by name (ascending) for ties
+  studentAttendanceData.sort((a, b) => {
+    if (b.attendancePercentage !== a.attendancePercentage) {
+      return b.attendancePercentage - a.attendancePercentage;
+    }
+    return a.studentName.localeCompare(b.studentName);
+  });
+
+  // 7. Add ranks (handle ties properly)
+  const leaderboard = [];
+  let currentRank = 1;
+
+  for (let i = 0; i < studentAttendanceData.length; i++) {
+    const student = studentAttendanceData[i];
+    
+    if (i > 0 && student!.attendancePercentage !== studentAttendanceData[i - 1]!.attendancePercentage) {
+      currentRank = i + 1;
+    }
+
+    leaderboard.push({
+      rank: currentRank,
+      ...student
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      leaderboard,
+      meta: {
+        divisionId: division.id,
+        divisionCode: division.code,
+        semesterNumber: division.currentSemester.number,
+        totalStudents: totalStudentsInDivision,
+        totalClasses: totalClassesInDateRange,
+        dateRange: {
+          from: fromDate.toISOString().split('T')[0],
+          to: toDate.toISOString().split('T')[0]
+        },
+        semesterPeriod: {
+          start: division.currentSemester.start_date.toISOString().split('T')[0],
+          end: division.currentSemester.end_date ? division.currentSemester.end_date.toISOString().split('T')[0] : null
+        }
+      }
+    }
   });
 });
