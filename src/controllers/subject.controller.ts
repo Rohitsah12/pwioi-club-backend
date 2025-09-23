@@ -20,11 +20,7 @@ const updateSubjectSchema = z.object({
   teacher_id: z.string().min(1).optional(),
 });
 
-/**
- * @desc    Create a new subject
- * @route   POST /api/subjects
- * @access  Private (ADMIN, SUPER_ADMIN)
- */
+
 export const createSubject = catchAsync(async (req: Request, res: Response) => {
   const validation = createSubjectSchema.safeParse(req.body);
 
@@ -38,16 +34,8 @@ export const createSubject = catchAsync(async (req: Request, res: Response) => {
 
   const { name, semester_id, credits, code, teacher_id } = validation.data;
 
-  // Check if subject code already exists
-  // const existingCode = await prisma.subject.findUnique({
-  //   where: { code }
-  // });
 
-  // if (existingCode) {
-  //   throw new AppError(`Subject with code '${code}' already exists`, 409);
-  // }
 
-  // Validate foreign key references
   const [semester, teacher] = await Promise.all([
     prisma.semester.findUnique({ where: { id: semester_id } }),
     prisma.teacher.findUnique({ where: { id: teacher_id } })
@@ -61,7 +49,6 @@ export const createSubject = catchAsync(async (req: Request, res: Response) => {
     throw new AppError("Teacher not found", 404);
   }
 
-  // Create the subject
   const subject = await prisma.subject.create({
     data: {
       name,
