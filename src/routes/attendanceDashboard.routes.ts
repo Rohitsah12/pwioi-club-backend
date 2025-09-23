@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { getAttendanceDashboard } from "../controllers/attendanceDashboard.controller.js";
+import { getAttendanceDashboard, getSchoolAnalysisByDivision } from "../controllers/attendanceDashboard.controller.js";
 
 const attendanceDashboardRoutes = Router();
 
 
 attendanceDashboardRoutes.get("/",getAttendanceDashboard);
+attendanceDashboardRoutes.get('/school-analysis',getSchoolAnalysisByDivision);
 
 
 

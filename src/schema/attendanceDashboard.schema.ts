@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-export const attendanceDashboardSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(15),
+export const schoolAnalysisSchema = z.object({
+  school: z.enum(['SOT', 'SOM', 'SOH']),
+  from: z.coerce.date().refine((date) => !isNaN(date.getTime()), {
+    message: 'The "from" date must be in YYYY-MM-DD format.',
+  }),
+  to: z.coerce.date().optional(),
 });

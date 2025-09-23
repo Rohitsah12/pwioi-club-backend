@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
 import type { SchoolName } from '@prisma/client';
+import { schoolAnalysisSchema } from '../schema/attendanceDashboard.schema.js';
 
 const initializeSchoolData = () => ({
   totalStudents: 0,
@@ -150,3 +151,148 @@ export const getAttendanceDashboard = catchAsync(async (req: Request, res: Respo
   });
 });
 
+
+export const getSchoolAnalysisByDivision = catchAsync(async (req: Request, res: Response) => {
+  const validation = schoolAnalysisSchema.safeParse(req.query);
+  if (!validation.success) {
+    const errorMessages = validation.error.issues.map(issue => issue.message).join(', ');
+    throw new AppError(errorMessages, 400);
+  }
+  
+  const { school, from, to } = validation.data;
+  const fromDate = from;
+  const toDate = to || new Date();
+
+  if (fromDate > toDate) {
+    throw new AppError('The "from" date cannot be after the "to" date.', 400);
+  }
+
+  const semesterDateFilter = {
+    start_date: { lte: toDate }, 
+    OR: [
+      { end_date: { gte: fromDate } }, 
+      { end_date: null }              
+    ],
+  };
+
+  const divisions = await prisma.division.findMany({
+    where: {
+      school: { name: school },
+      semesters: {
+        some: semesterDateFilter
+      }
+    },
+    include: {
+      center: {
+        select: {
+          id: true,
+          name: true,
+          code: true
+        }
+      },
+      batch: {
+        select: { name: true }
+      },
+      semesters: {
+        where: semesterDateFilter,
+        orderBy: { start_date: 'desc' }, 
+        take: 1,
+        include: {
+          subjects: {
+            include: {
+              classes: {
+                where: {
+                  start_date: {
+                    gte: fromDate,
+                    lte: toDate
+                  }
+                },
+                include: {
+                  attendances: true
+                }
+              }
+            }
+          },
+          students: true // Get students in this semester
+        }
+      }
+    },
+  });
+
+  if (divisions.length === 0) {
+    return res.status(200).json({
+      success: true,
+      message: `No active divisions found for school ${school} in the specified date range.`,
+      data: []
+    });
+  }
+
+  // Group by center
+  const aggregatedData = new Map<string, {
+    centerId: string;
+    centerName: string;
+    centerCode: number;
+    divisions: {
+      divisionId: string;
+      divisionCode: string;
+      batchName: string;
+      batchCode: string;
+      averageAttendance: number;
+      semesterStartDate: Date | null;
+    }[];
+  }>();
+
+  divisions.forEach((division) => {
+    const center = division.center;
+    const currentSemester = division.semesters[0]; 
+    
+    let totalClasses = 0;
+    let totalPresentAttendances = 0;
+    let totalStudents = currentSemester?.students.length || 0;
+
+    if (currentSemester) {
+      currentSemester.subjects.forEach(subject => {
+        subject.classes.forEach(classSession => {
+          totalClasses += totalStudents; 
+          
+          const presentCount = classSession.attendances.filter(
+            attendance => attendance.status === 'PRESENT'
+          ).length;
+          
+          totalPresentAttendances += presentCount;
+        });
+      });
+    }
+
+    const averageAttendance = totalClasses > 0 
+      ? Math.round((totalPresentAttendances / totalClasses) * 100) 
+      : 0;
+
+    let centerEntry = aggregatedData.get(center.id);
+    if (!centerEntry) {
+      centerEntry = {
+        centerId: center.id,
+        centerName: center.name,
+        centerCode: center.code,
+        divisions: [],
+      };
+      aggregatedData.set(center.id, centerEntry);
+    }
+
+    centerEntry.divisions.push({
+      divisionId: division.id,
+      divisionCode: division.code,
+      batchName: division.batch.name,
+      batchCode: `${division.batch.name}${division.code}`,
+      averageAttendance: averageAttendance,
+      semesterStartDate: currentSemester?.start_date || null,
+    });
+  });
+
+  const result = Array.from(aggregatedData.values());
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+});
