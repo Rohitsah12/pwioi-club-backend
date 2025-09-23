@@ -25,11 +25,23 @@ interface Division {
     classes: { [classKey: string]: ClassData };
 }
 
+interface Batch {
+    batch_name: string;
+    batch_id: string;
+    divisions: { [divisionCode: string]: Division };
+}
+
+interface School {
+    school_name: string;
+    school_id: string;
+    batches: { [batchName: string]: Batch };
+}
+
 interface CenterData {
     center_name: string;
     center_location: string;
     date: string;
-    divisions: { [divisionCode: string]: Division };
+    schools: { [schoolName: string]: School };
     message?: string;
 }
 
@@ -40,51 +52,55 @@ interface AttendanceResponse {
 export const getAttendanceByCenter = catchAsync(async (req: Request, res: Response) => {
     const { centercode, date } = req.query as GetAttendanceQuery;
 
-    // Validate required parameters
     if (!centercode || !date) {
         throw new AppError('Missing required parameters: centercode and date', 400);
     }
 
-    // Parse date to get start and end of day
     const queryDate = new Date(date);
     const startDate = startOfDay(queryDate);
     const endDate = endOfDay(queryDate);
 
-    // Convert centercode to number for comparison
     const centerCode = parseInt(centercode);
     if (isNaN(centerCode)) {
         throw new AppError('Invalid centercode format. Must be a number.', 400);
     }
 
-    // Get center with divisions and their classes for the specified date
     const centerData = await prisma.center.findFirst({
         where: {
             code: centerCode
         },
         include: {
-            divisions: {
+            schools: {
                 include: {
-                    classes: {
-                        where: {
-                            start_date: {
-                                gte: startDate,
-                                lte: endDate
-                            }
-                        },
+                    batches: {
                         include: {
-                            attendances: {
+                            divisions: {
                                 include: {
-                                    student: {
-                                        select: {
-                                            enrollment_id: true,
-                                            name: true
+                                    classes: {
+                                        where: {
+                                            start_date: {
+                                                gte: startDate,
+                                                lte: endDate
+                                            }
+                                        },
+                                        include: {
+                                            attendances: {
+                                                include: {
+                                                    student: {
+                                                        select: {
+                                                            enrollment_id: true,
+                                                            name: true
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            subject: {
+                                                select: {
+                                                    name: true
+                                                }
+                                            }
                                         }
                                     }
-                                }
-                            },
-                            subject: {
-                                select: {
-                                    name: true
                                 }
                             }
                         }
@@ -105,42 +121,76 @@ export const getAttendanceByCenter = catchAsync(async (req: Request, res: Respon
             center_name: centerData.name,
             center_location: centerData.location,
             date: date,
-            divisions: {}
+            schools: {}
         }
     };
 
-    // Process each division
-    centerData.divisions.forEach(division => {
-        if (division.classes.length > 0) {
-            response[centerKey]!.divisions[division.code] = {
-                division_name: division.code,
-                division_id: division.id,
-                classes: division.classes.reduce((acc: { [classKey: string]: ClassData }, classItem) => {
-                    // Format date as YYYY-MM-DD
-                    const classDate = new Date(classItem.start_date).toISOString().split('T')[0];
-                    
-                    // Create class identifier: subjectname-lecturenumber-date
-                    const classKey = `${classItem.subject.name}-${classItem.lecture_number}-${classDate}`;
-                    
-                    acc[classKey] = {
-                        students: classItem.attendances.map(attendance => ({
-                            enrollment_id: attendance.student.enrollment_id,
-                            student_name: attendance.student.name,
-                            status: attendance.status
-                        }))
-                    };
-                    
-                    return acc;
-                }, {})
+    let hasAnyClasses = false;
+
+    // Process each school
+    centerData.schools.forEach(school => {
+        const schoolKey = school.name;
+        
+        response[centerKey]!.schools[schoolKey] = {
+            school_name: school.name,
+            school_id: school.id,
+            batches: {}
+        };
+
+        // Process each batch in the school
+        school.batches.forEach(batch => {
+            const batchKey = batch.name;
+            
+            response[centerKey]!.schools[schoolKey]!.batches[batchKey] = {
+                batch_name: batch.name,
+                batch_id: batch.id,
+                divisions: {}
             };
+
+            // Process each division in the batch
+            batch.divisions.forEach(division => {
+                if (division.classes.length > 0) {
+                    hasAnyClasses = true;
+                    
+                    response[centerKey]!.schools[schoolKey]!.batches[batchKey]!.divisions[division.code] = {
+                        division_name: division.code,
+                        division_id: division.id,
+                        classes: division.classes.reduce((acc: { [classKey: string]: ClassData }, classItem) => {
+                            // Format date as YYYY-MM-DD
+                            const classDate = new Date(classItem.start_date).toISOString().split('T')[0];
+                            
+                            // Create class identifier: subjectname-lecturenumber-date
+                            const classKey = `${classItem.subject.name}-${classItem.lecture_number}-${classDate}`;
+                            
+                            acc[classKey] = {
+                                students: classItem.attendances.map(attendance => ({
+                                    enrollment_id: attendance.student.enrollment_id,
+                                    student_name: attendance.student.name,
+                                    status: attendance.status
+                                }))
+                            };
+                            
+                            return acc;
+                        }, {})
+                    };
+                }
+            });
+
+            // Remove batch if it has no divisions with classes
+            if (Object.keys(response[centerKey]!.schools[schoolKey]!.batches[batchKey]!.divisions).length === 0) {
+                delete response[centerKey]!.schools[schoolKey]!.batches[batchKey];
+            }
+        });
+
+        // Remove school if it has no batches with classes
+        if (Object.keys(response[centerKey]!.schools[schoolKey]!.batches).length === 0) {
+            delete response[centerKey]!.schools[schoolKey];
         }
     });
 
-    // If no divisions have classes for the date, add message
-    const centerResponse = response[centerKey];
-    if (Object.keys(centerResponse!.divisions).length === 0) {
-        centerResponse!.divisions = {};
-        centerResponse!.message = "No classes found for the specified date";
+    // If no classes found for the date, add message
+    if (!hasAnyClasses) {
+        response[centerKey]!.message = "No classes found for the specified date";
     }
 
     res.status(200).json({
