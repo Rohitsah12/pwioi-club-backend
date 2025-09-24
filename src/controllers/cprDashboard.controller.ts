@@ -148,7 +148,6 @@ const initializeSchoolDashboard = () => ({
 export const getCprDashboard = catchAsync(async (req: Request, res: Response) => {
     const today = new Date();
 
-    // 1. Fetch all ongoing subjects that have at least one CPR subtopic
     const ongoingSubjects = await prisma.subject.findMany({
         where: {
             semester: {
@@ -265,11 +264,11 @@ export const getSchoolCprDetailsByCenter = catchAsync(async (req: Request, res: 
 
     const semesterDateFilter = {
         AND: [
-            { start_date: { lte: toDate } }, // Semester starts before or on end date
+            { start_date: { lte: toDate } }, 
             {
                 OR: [
-                    { end_date: { gte: fromDate } }, // Semester ends after or on start date
-                    { end_date: null } // Ongoing semesters
+                    { end_date: { gte: fromDate } }, 
+                    { end_date: null } 
                 ]
             }
         ]
@@ -304,7 +303,8 @@ export const getSchoolCprDetailsByCenter = catchAsync(async (req: Request, res: 
                 }
             },
             semester: {
-                include: {
+                select: {
+                    start_date: true, // Add semester start date
                     division: {
                         include: {
                             batch: true,
@@ -334,15 +334,16 @@ export const getSchoolCprDetailsByCenter = catchAsync(async (req: Request, res: 
             batchName: string;
             totalSubTopics: number;
             completedSubTopics: number;
-        }>;
+            semesterStartDate: Date;        }>;
     }>();
 
     for (const subject of subjects) {
         const division = subject.semester?.division;
         const center = division?.center;
         const batch = division?.batch;
+        const semesterStartDate = subject.semester?.start_date;
 
-        if (!division || !center || !batch) continue; 
+        if (!division || !center || !batch || !semesterStartDate) continue; 
 
         let subjectTotalSubTopics = 0;
         let subjectCompletedSubTopics = 0;
@@ -383,6 +384,7 @@ export const getSchoolCprDetailsByCenter = catchAsync(async (req: Request, res: 
                 batchName: batch.name,
                 totalSubTopics: 0,
                 completedSubTopics: 0,
+                semesterStartDate: semesterStartDate,
             };
             centerEntry.divisions.set(division.id, divisionEntry);
         }
@@ -405,6 +407,7 @@ export const getSchoolCprDetailsByCenter = catchAsync(async (req: Request, res: 
                 divisionCode: div.divisionCode,
                 batchCode: `${div.batchName}${div.divisionCode}`,
                 progress: progress,
+                semesterStartDate: div.semesterStartDate,
             };
         }),
     }));
