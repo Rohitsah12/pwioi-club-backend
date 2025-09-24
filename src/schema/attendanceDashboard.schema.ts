@@ -30,3 +30,32 @@ export const leaderboardSchema = z.object({
     message: "Invalid 'to' date format. Use YYYY-MM-DD format.",
   }).optional(),
 });
+
+export const atRiskStudentSchema = z.object({
+  divisionId: z.string().uuid({
+    message: 'A valid divisionId is required.',
+  }),
+  subjectCnt: z.coerce.number().int().positive({
+    message: 'subjectCnt must be a positive number.',
+  }),
+  threshold: z.coerce.number().int().min(0).max(100, 'Threshold must be between 0 and 100').positive({
+    message: 'A threshold percentage is required.',
+  }),
+});
+
+
+
+export const consecutiveAbsenceSchema = z.object({
+  divisionId: z.string().uuid({
+    message: 'A valid divisionId is required.',
+  }),
+  numberOfDays: z.coerce.number().int().positive({
+    message: 'numberOfDays must be a positive integer.',
+  }),
+  from: z.string().transform((str) => new Date(str)).refine((date) => !isNaN(date.getTime()), {
+    message: "Invalid 'from' date format. Use YYYY-MM-DD format.",
+  }).optional(),
+  to: z.string().transform((str) => new Date(str)).refine((date) => !isNaN(date.getTime()), {
+    message: "Invalid 'to' date format. Use YYYY-MM-DD format.",
+  }).optional(),
+});

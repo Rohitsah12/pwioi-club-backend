@@ -3,7 +3,9 @@ import { prisma } from '../db/prisma.js';
 import { catchAsync } from '../utils/catchAsync.js';
 import { AppError } from '../utils/AppError.js';
 import type { SchoolName } from '@prisma/client';
-import { divisionAnalysisSchema, leaderboardSchema, schoolAnalysisSchema } from '../schema/attendanceDashboard.schema.js';
+import { atRiskStudentSchema, consecutiveAbsenceSchema, divisionAnalysisSchema, leaderboardSchema, schoolAnalysisSchema } from '../schema/attendanceDashboard.schema.js';
+import { calculateAtRiskStudents, calculateConsecutiveAbsences } from '../service/atriskAttendance.service.js';
+import excel from 'exceljs';
 
 const initializeSchoolData = () => ({
   totalStudents: 0,
@@ -643,4 +645,344 @@ export const getDivisionAttendanceLeaderboard = catchAsync(async (req: Request, 
       }
     }
   });
+});
+
+
+export const getAtRiskStudents = catchAsync(async (req: Request, res: Response) => {
+    const validation = atRiskStudentSchema.safeParse(req.query);
+    if (!validation.success) {
+        const errorMessages = validation.error.issues.map(issue => issue.message).join(', ');
+        throw new AppError(errorMessages, 400);
+    }
+
+    const { divisionId, subjectCnt, threshold } = validation.data;
+    const result = await calculateAtRiskStudents(divisionId, subjectCnt, threshold);
+
+    res.status(200).json({
+        success: true,
+        data: {
+            atRiskStudents: result.atRiskStudents,
+            summary: {
+                totalStudentsInDivision: result.totalStudents,
+                totalSubjectsInSemester: result.totalSubjects,
+                atRiskStudentsCount: result.atRiskStudents.length,
+                criteria: {
+                    threshold: `${threshold}%`,
+                    subjectCount: `${subjectCnt} or more subjects`,
+                }
+            }
+        }
+    });
+});
+
+
+
+export const exportAtRiskStudentsToExcel = catchAsync(async (req: Request, res: Response) => {
+    const validation = atRiskStudentSchema.safeParse(req.query);
+    if (!validation.success) {
+        const errorMessages = validation.error.issues.map(issue => issue.message).join(', ');
+        throw new AppError(errorMessages, 400);
+    }
+
+    const { divisionId, subjectCnt, threshold } = validation.data;
+    const { atRiskStudents, divisionDetails } = await calculateAtRiskStudents(divisionId, subjectCnt, threshold);
+
+    // Create workbook and worksheet
+    const workbook = new excel.Workbook();
+    const worksheet = workbook.addWorksheet('At-Risk Students');
+
+    // Define columns with subject details
+    worksheet.columns = [
+        { header: 'Enrollment ID', key: 'enrollmentId', width: 20 },
+        { header: 'Student Name', key: 'studentName', width: 30 },
+        { header: 'Overall Attendance (%)', key: 'overallAttendance', width: 25 },
+        { header: 'Subjects Below Threshold', key: 'subjectsBelowThresholdCount', width: 30 },
+        { header: 'Subject Codes Below Threshold', key: 'subjectCodes', width: 40 },
+        { header: 'Subject Details', key: 'subjectDetails', width: 60 },
+    ];
+    
+    // Style the header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, size: 12 };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE6F3FF' }
+    };
+
+    // Add data rows with enhanced subject information
+    atRiskStudents.forEach((student, index) => {
+        // Prepare subject codes and details for display
+        const subjectCodes = student.subjectsBelowThreshold
+            .map(subject => subject.subjectCode)
+            .join(', ');
+            
+        const subjectDetails = student.subjectsBelowThreshold
+            .map(subject => `${subject.subjectCode}: ${subject.attendancePercentage}% (${subject.attendedClasses}/${subject.totalClasses})`)
+            .join('\n');
+
+        const rowData = {
+            ...student,
+            subjectCodes,
+            subjectDetails
+        };
+        
+        const row = worksheet.addRow(rowData);
+        
+        // Enable text wrapping for subject details column
+        row.getCell('subjectDetails').alignment = { 
+            vertical: 'top', 
+            horizontal: 'left', 
+            wrapText: true 
+        };
+        
+        // Alternate row colors
+        if (index % 2 === 0) {
+            row.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFF8F9FA' }
+            };
+        }
+        
+        // Color-code attendance percentage
+        const attendanceCell = row.getCell('overallAttendance');
+        if (student.overallAttendance >= 75) {
+            attendanceCell.font = { color: { argb: 'FF008000' }, bold: true }; // Green
+        } else if (student.overallAttendance >= 60) {
+            attendanceCell.font = { color: { argb: 'FFFF8C00' }, bold: true }; // Orange
+        } else {
+            attendanceCell.font = { color: { argb: 'FFDC143C' }, bold: true }; // Red
+        }
+        
+        // Color-code subjects below threshold count
+        const subjectsCell = row.getCell('subjectsBelowThresholdCount');
+        if (student.subjectsBelowThresholdCount >= 5) {
+            subjectsCell.font = { color: { argb: 'FFDC143C' }, bold: true }; // Red - Critical
+        } else if (student.subjectsBelowThresholdCount >= 3) {
+            subjectsCell.font = { color: { argb: 'FFFF8C00' }, bold: true }; // Orange - Warning
+        }
+        
+        // Color-code subject codes for easy identification
+        const subjectCodesCell = row.getCell('subjectCodes');
+        subjectCodesCell.font = { color: { argb: 'FF0066CC' }, bold: true }; // Blue
+        
+        // Color-code subject details
+        const subjectDetailsCell = row.getCell('subjectDetails');
+        subjectDetailsCell.font = { color: { argb: 'FF333333' }, size: 10 }; // Dark gray, smaller font
+    });
+    
+    // Add borders and alignment to all cells
+    worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell, colNumber) => {
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+            
+            // Center align headers, left align data
+            if (rowNumber === 1) {
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            } else {
+                // Special handling for subject details column (column 7)
+                if (colNumber === 7) {
+                    cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 0.5 };
+                } else {
+                    cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 0.5 };
+                }
+            }
+        });
+        
+        // Set row height for rows with subject details
+        if (rowNumber > 1) {
+            const student = atRiskStudents[rowNumber - 2];
+            if (student && student.subjectsBelowThreshold.length > 0) {
+                // Calculate height based on number of subjects (minimum 20, add 15 for each subject)
+                const minHeight = 20;
+                const heightPerSubject = 15;
+                row.height = Math.max(minHeight, student.subjectsBelowThreshold.length * heightPerSubject);
+            }
+        }
+    });
+
+    // Auto-fit column widths
+    worksheet.columns.forEach(column => {
+        if (column.key && column.width) {
+            const maxLength = Math.max(
+                column.header?.length || 0,
+                ...atRiskStudents.map(student => 
+                    String(student[column.key as keyof typeof student] || '').length
+                )
+            );
+            column.width = Math.max(column.width, maxLength + 2);
+        }
+    });
+
+    // Construct filename as specified
+    const centerCode = divisionDetails.center.code;
+    const schoolName = divisionDetails.school.name;
+    const batchName = divisionDetails.batch.name;
+    const divisionCode = divisionDetails.code;
+    
+    const fileName = `${centerCode}${schoolName}${batchName}${divisionCode}_students_with_<${threshold}%_subject_attendance_in_${subjectCnt}+_subjects.xlsx`;
+
+    // Set response headers
+    res.setHeader(
+        'Content-Type', 
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+        'Content-Disposition', 
+        `attachment; filename="${fileName}"`
+    );
+
+    await workbook.xlsx.write(res);
+    res.status(200).end();
+});
+
+
+export const getConsecutiveAbsences = catchAsync(async (req: Request, res: Response) => {
+    const validation = consecutiveAbsenceSchema.safeParse(req.query);
+    if (!validation.success) {
+        const errorMessages = validation.error.issues.map(issue => issue.message).join(', ');
+        throw new AppError(errorMessages, 400);
+    }
+
+    const { divisionId, numberOfDays, from, to } = validation.data;
+    const result = await calculateConsecutiveAbsences(divisionId, numberOfDays, from, to);
+
+    res.status(200).json({
+        success: true,
+        data: {
+            flaggedStudents: result.flaggedStudents,
+            summary: {
+                totalStudentsInDivision: result.totalStudents,
+                studentsWithConsecutiveAbsences: result.flaggedStudents.length,
+                minimumConsecutiveDays: numberOfDays,
+                totalInstructionalDays: result.totalInstructionalDays,
+                dateRange: {
+                    from: result.dateRange.from?.toISOString().split('T')[0],
+                    to: result.dateRange.to?.toISOString().split('T')[0]
+                }
+            }
+        }
+    });
+});
+
+export const exportConsecutiveAbsencesToExcel = catchAsync(async (req: Request, res: Response) => {
+    const validation = consecutiveAbsenceSchema.safeParse(req.query);
+    if (!validation.success) {
+        const errorMessages = validation.error.issues.map(issue => issue.message).join(', ');
+        throw new AppError(errorMessages, 400);
+    }
+
+    const { divisionId, numberOfDays, from, to } = validation.data;
+    const { flaggedStudents, divisionDetails } = await calculateConsecutiveAbsences(divisionId, numberOfDays, from, to);
+
+    // Create workbook and worksheet
+    const workbook = new excel.Workbook();
+    const worksheet = workbook.addWorksheet('Consecutive Absences');
+
+    // Define columns
+    worksheet.columns = [
+        { header: 'Enrollment ID', key: 'enrollmentId', width: 25 },
+        { header: 'Student Name', key: 'studentName', width: 35 },
+        { header: 'Consecutive Absent Days', key: 'consecutiveAbsentDays', width: 30 },
+        { header: 'Last Attended On', key: 'lastAttendedOn', width: 25 },
+    ];
+
+    // Style the header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, size: 12 };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE6F3FF' }
+    };
+
+    // Add data rows with conditional formatting
+    flaggedStudents.forEach((student, index) => {
+        const row = worksheet.addRow(student);
+        
+        // Alternate row colors
+        if (index % 2 === 0) {
+            row.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFF8F9FA' }
+            };
+        }
+        
+        // Color-code consecutive absent days based on severity
+        const absentDaysCell = row.getCell('consecutiveAbsentDays');
+        if (student.consecutiveAbsentDays >= 15) {
+            absentDaysCell.font = { color: { argb: 'FFDC143C' }, bold: true }; // Red - Critical
+        } else if (student.consecutiveAbsentDays >= 10) {
+            absentDaysCell.font = { color: { argb: 'FFFF4500' }, bold: true }; // Dark Orange - Severe
+        } else if (student.consecutiveAbsentDays >= 7) {
+            absentDaysCell.font = { color: { argb: 'FFFF8C00' }, bold: true }; // Orange - Warning
+        } else {
+            absentDaysCell.font = { color: { argb: 'FFFF6347' }, bold: true }; // Tomato - Caution
+        }
+        
+        // Highlight students who never attended in the period
+        const lastAttendedCell = row.getCell('lastAttendedOn');
+        if (student.lastAttendedOn === 'Never attended in this period') {
+            lastAttendedCell.font = { color: { argb: 'FFDC143C' }, bold: true, italic: true };
+        }
+    });
+
+    // Add borders and alignment to all cells
+    worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+            
+            // Center align headers, left align data
+            if (rowNumber === 1) {
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            } else {
+                cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 0.5 };
+            }
+        });
+    });
+
+    // Auto-fit column widths
+    worksheet.columns.forEach(column => {
+        if (column.key && column.width) {
+            const maxLength = Math.max(
+                column.header?.length || 0,
+                ...flaggedStudents.map(student => 
+                    String(student[column.key as keyof typeof student] || '').length
+                )
+            );
+            column.width = Math.max(column.width, maxLength + 2);
+        }
+    });
+
+    // Construct filename
+    const batchCode = `${divisionDetails.center.code}${divisionDetails.school.name}${divisionDetails.batch.name}${divisionDetails.code}`;
+    const fileName = `${batchCode}_Consecutive_Absences_${numberOfDays}+_Days.xlsx`;
+
+    // Set response headers
+    res.setHeader(
+        'Content-Type', 
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+        'Content-Disposition', 
+        `attachment; filename="${fileName}"`
+    );
+
+    // Write workbook to response
+    await workbook.xlsx.write(res);
+    res.status(200).end();
 });
