@@ -4,9 +4,9 @@ import { sendAdminWeeklyCprReport } from './adminCpr.job.js';
 
 console.log("Scheduler is initializing...");
 
-cron.schedule('0 17 * * *', async () => {
+cron.schedule('0 18 * * *', async () => {
     console.log('-------------------------------------');
-    console.log('Triggering the daily CPR reminder job (5:00 PM IST)...');
+    console.log('Triggering the daily CPR reminder job (6:00 PM IST)...');
     try {
         await sendCprReminders();
     } catch (error) {
@@ -17,9 +17,9 @@ cron.schedule('0 17 * * *', async () => {
     timezone: "Asia/Kolkata"
 });
 
-cron.schedule('0 17 * * 5', async () => {
+cron.schedule('0 18 * * 5', async () => {
     console.log('=====================================');
-    console.log('Triggering the Admin Weekly CPR Report job (Friday 5:00 PM IST)...');
+    console.log('Triggering the Admin Weekly CPR Report job (Friday 6:00 PM IST)...');
     try {
         await sendAdminWeeklyCprReport();
     } catch (error) {
