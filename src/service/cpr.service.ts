@@ -5,6 +5,7 @@ interface SubTopic {
     lecture_number: number;
     status: string;
     planned_start_date?: Date | string | null;
+    actual_start_date?: Date | string | null;
 }
 
 interface Topic {
@@ -68,5 +69,44 @@ export function calculateCprSummaryForSubject(
       expected_completion_lecture: expectedLectureNumber,
       actual_completion_lecture: parseFloat(actualLectureProgress.toFixed(2)),
       completion_lag: parseFloat(completionLag.toFixed(2)),
+    };
+}
+
+// New function to calculate punctuality metrics
+export function calculatePunctualityForSubject(cprModules: CprModuleWithTopics[]) {
+    const allSubTopics = cprModules.flatMap(m => 
+        m.topics.flatMap(t => t.subTopics)
+    );
+    
+    let lateCount = 0;
+    let totalWithDates = 0;
+    let onTimeCount = 0;
+    
+    for (const subTopic of allSubTopics) {
+        if (subTopic.planned_start_date && subTopic.actual_start_date) {
+            totalWithDates++;
+            const plannedDate = new Date(subTopic.planned_start_date);
+            const actualDate = new Date(subTopic.actual_start_date);
+            
+            // Reset time to compare only dates
+            plannedDate.setHours(0, 0, 0, 0);
+            actualDate.setHours(0, 0, 0, 0);
+            
+            if (actualDate > plannedDate) {
+                lateCount++;
+            } else {
+                onTimeCount++;
+            }
+        }
+    }
+    
+    const punctualityPercentage = totalWithDates > 0 ? 
+        (onTimeCount / totalWithDates) * 100 : 100;
+    
+    return {
+        punctuality_late_count: lateCount,
+        punctuality_on_time_count: onTimeCount,
+        total_scheduled_topics: totalWithDates,
+        punctuality_percentage: parseFloat(punctualityPercentage.toFixed(1))
     };
 }
