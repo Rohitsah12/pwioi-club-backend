@@ -329,7 +329,12 @@ export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Reques
       },
       students: {
         where: { is_active: true },
-        select: { id: true }
+        select: { 
+          id: true,
+          name: true,
+          email: true,
+          enrollment_id: true
+        }
       },
     },
   });
@@ -358,7 +363,60 @@ export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Reques
 
   const studentIds = students.map(s => s.id);
 
-  // 3. Process each subject to find the percentage of students below the threshold
+  // 3. Calculate overall attendance for each student across all subjects in the division
+  const overallAttendanceData = await prisma.attendance.groupBy({
+    by: ['student_id'],
+    where: {
+      student_id: { in: studentIds },
+      class: {
+        division_id: divisionId,
+        start_date: {
+          gte: fromDate,
+          lte: toDate,
+          lt: now
+        },
+      },
+    },
+    _count: {
+      id: true,
+    },
+  });
+
+  // Get total classes count for overall attendance calculation
+  const totalClassesInDivision = await prisma.class.count({
+    where: {
+      division_id: divisionId,
+      start_date: {
+        gte: fromDate,
+        lte: toDate,
+        lt: now
+      },
+    },
+  });
+
+  // Get present attendance count for each student for overall attendance
+  const overallPresentAttendance = await prisma.attendance.groupBy({
+    by: ['student_id'],
+    where: {
+      student_id: { in: studentIds },
+      status: 'PRESENT',
+      class: {
+        division_id: divisionId,
+        start_date: {
+          gte: fromDate,
+          lte: toDate,
+          lt: now
+        },
+      },
+    },
+    _count: { id: true },
+  });
+
+  const overallAttendanceMap = new Map(
+    overallPresentAttendance.map(item => [item.student_id, item._count.id])
+  );
+
+  // 4. Process each subject to find the percentage of students below the threshold
   const analysisData = await Promise.all(
     subjects.map(async (subject) => {
       // For each subject, count total classes that have occurred within the date range
@@ -381,7 +439,9 @@ export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Reques
           subjectName: subject.name,
           percentageOfStudentsBelowThreshold: 0,
           totalClasses: 0,
-          studentsAnalyzed: totalStudentsInDivision
+          studentsAnalyzed: totalStudentsInDivision,
+          studentsBelowThreshold: 0,
+          studentsDetails: []
         };
       }
 
@@ -409,6 +469,7 @@ export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Reques
 
       // Count students whose attendance for this subject is below the threshold
       let studentsBelowThresholdCount = 0;
+      const studentsDetails: any[] = [];
       
       for (const student of students) {
         const attendedCount = attendedMap.get(student.id) || 0;
@@ -416,8 +477,34 @@ export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Reques
         
         if (studentAttendancePercentage < threshold) {
           studentsBelowThresholdCount++;
+          
+          // Calculate overall attendance for this student
+          const overallPresentCount = overallAttendanceMap.get(student.id) || 0;
+          const overallAttendancePercentage = totalClassesInDivision > 0 
+            ? Math.round((overallPresentCount / totalClassesInDivision) * 100) 
+            : 0;
+          
+          studentsDetails.push({
+            studentId: student.id,
+            studentName: student.name,
+            studentEmail: student.email,
+            enrollmentId: student.enrollment_id,
+            subjectAttendance: {
+              attendedClasses: attendedCount,
+              totalClasses: totalClassesForSubject,
+              attendancePercentage: studentAttendancePercentage
+            },
+            overallAttendance: {
+              attendedClasses: overallPresentCount,
+              totalClasses: totalClassesInDivision,
+              attendancePercentage: overallAttendancePercentage
+            }
+          });
         }
       }
+
+      // Sort students by subject attendance percentage (lowest first)
+      studentsDetails.sort((a, b) => a.subjectAttendance.attendancePercentage - b.subjectAttendance.attendancePercentage);
 
       // Calculate the final percentage
       const percentageOfStudentsBelowThreshold = Math.round(
@@ -430,7 +517,8 @@ export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Reques
         percentageOfStudentsBelowThreshold,
         totalClasses: totalClassesForSubject,
         studentsAnalyzed: totalStudentsInDivision,
-        studentsBelowThreshold: studentsBelowThresholdCount
+        studentsBelowThreshold: studentsBelowThresholdCount,
+        studentsDetails
       };
     })
   );
@@ -445,7 +533,8 @@ export const getDivisionSubjectThresholdAnalysis = catchAsync(async (req: Reques
         to: toDate.toISOString().split('T')[0]
       },
       threshold,
-      totalStudents: totalStudentsInDivision
+      totalStudents: totalStudentsInDivision,
+      totalClassesInDivision
     }
   });
 });

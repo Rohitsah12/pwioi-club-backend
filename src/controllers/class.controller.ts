@@ -110,8 +110,6 @@ export const createWeeklySchedule = catchAsync(async (req: Request, res: Respons
             if (roomConflict) throw new AppError(`Room conflict on ${format(pClass.start_date, 'PPP p')}`, 409);
         }
 
-        const teacherConflict = await prisma.class.findFirst({ where: { teacher_id: teacherId, ...conflictWhere } });
-        if (teacherConflict) throw new AppError(`Teacher has a schedule conflict on ${format(pClass.start_date, 'PPP p')}`, 409);
     }
 
     const createdClasses = await prisma.$transaction(async (tx) => {
@@ -232,8 +230,6 @@ export const updateClass = catchAsync(async (req: Request, res: Response) => {
             if (roomConflict) throw new AppError('Room is already booked for this time slot', 409);
         }
 
-        const teacherConflict = await prisma.class.findFirst({ where: { teacher_id: existingClass.teacher_id, ...conflictWhere } });
-        if (teacherConflict) throw new AppError('Teacher has a conflict with this time slot', 409);
     }
 
     const updatedClass = await prisma.$transaction(async (tx) => {
