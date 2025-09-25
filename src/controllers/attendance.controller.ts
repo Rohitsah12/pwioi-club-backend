@@ -160,12 +160,7 @@ export const markOrUpdateAttendance = catchAsync(async (req: Request, res: Respo
     }
 
     const now = new Date();
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 }); 
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
-    
-    if (classToUpdate.start_date < weekStart || classToUpdate.start_date > weekEnd) {
-        throw new AppError('Attendance can only be updated for classes within the current week (Mon-Sun).', 403);
-    }
+
     
     const upsertPromises = attendanceData.map(record =>
         prisma.attendance.upsert({
