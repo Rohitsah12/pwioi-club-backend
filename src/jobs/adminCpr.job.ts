@@ -166,7 +166,7 @@ function buildAdminReportHtml(data: any[]): string {
                 <th>Expected progress(lec)</th>
                 <th>Actual progress(lec)</th>
                 <th>Pacing Status</th>
-                <th>Punctuality Late</th>
+                <th>Punctuality</th>
               </tr>
             </thead>
             <tbody>`;
@@ -209,7 +209,7 @@ function buildAdminReportHtml(data: any[]): string {
                 <td class="progress-cell">${subject.actual_completion_lecture}</td>
                 <td class="${pacingClass}">${pacingText}</td>
                 <td class="col-punctuality">
-                  <span class="punctuality-indicator ${punctualityClass}">${punctualityText}</span>
+                  <span class="punctuality-indicator ${punctualityClass}">${punctualityText} Delayed Update</span>
                 </td>
               </tr>`;
       }
