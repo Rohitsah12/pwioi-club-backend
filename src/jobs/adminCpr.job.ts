@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma.js";
 import { sendEmail } from "../service/email.service.js";
-import { calculateCprSummaryForSubject } from "../service/cpr.service.js";
+import { calculateCprSummaryForSubject, calculatePunctualityForSubject } from "../service/cpr.service.js";
 import type { CprModule } from "@prisma/client";
 
 interface CprModuleWithTopics extends CprModule {
@@ -115,8 +115,8 @@ function transformSubjectsToReportData(subjects: any[]) {
     const schoolData = centerData.schools.get(school.id);
     const summary = calculateCprSummaryForSubject(subject.cprModules as CprModuleWithTopics[], subject);
     
-    // Calculate punctuality metrics
-    const punctualityData = calculatePunctualityMetrics(subject.cprModules as CprModuleWithTopics[]);
+    // Calculate punctuality metrics using the new function
+    const punctualityData = calculatePunctualityForSubject(subject.cprModules as CprModuleWithTopics[]);
     
     schoolData.subjects.push({
       ...summary,
@@ -130,40 +130,6 @@ function transformSubjectsToReportData(subjects: any[]) {
     finalReport.push(center);
   }
   return finalReport;
-}
-
-function calculatePunctualityMetrics(cprModules: CprModuleWithTopics[]) {
-  const allSubTopics = cprModules.flatMap(m => 
-    m.topics.flatMap(t => t.subTopics)
-  );
-  
-  let lateCount = 0;
-  let totalWithDates = 0;
-  
-  for (const subTopic of allSubTopics) {
-    if (subTopic.planned_start_date && subTopic.actual_start_date) {
-      totalWithDates++;
-      const plannedDate = new Date(subTopic.planned_start_date);
-      const actualDate = new Date(subTopic.actual_start_date);
-      
-      // Reset time to compare only dates
-      plannedDate.setHours(0, 0, 0, 0);
-      actualDate.setHours(0, 0, 0, 0);
-      
-      if (actualDate > plannedDate) {
-        lateCount++;
-      }
-    }
-  }
-  
-  const punctualityPercentage = totalWithDates > 0 ? 
-    ((totalWithDates - lateCount) / totalWithDates) * 100 : 100;
-  
-  return {
-    punctuality_late_count: lateCount,
-    total_scheduled_topics: totalWithDates,
-    punctuality_percentage: parseFloat(punctualityPercentage.toFixed(1))
-  };
 }
 
 function buildAdminReportHtml(data: any[]): string {
@@ -214,20 +180,27 @@ function buildAdminReportHtml(data: any[]): string {
           pacingClass = 'status-behind';
         } else if (lag < -1) {
           pacingText = `Ahead by ${Math.abs(Math.round(lag))} lectures`;
-          pacingClass = 'status-ahead'; // Using ontrack class for ahead status
+          pacingClass = 'status-ahead';
         } else {
           pacingText = 'On Track';
           pacingClass = 'status-ontrack';
         }
 
-        // Punctuality status
+        // Updated Punctuality status based on ISSUE PERCENTAGE
         let punctualityText, punctualityClass;
-        if (subject.punctuality_late_count === 0) {
-          punctualityText = `ON TIME (${Math.round(subject.punctuality_percentage)}%)`;
-          punctualityClass = 'punctuality-ontime';
+        // This property now holds the percentage of issues (e.g., 57.1)
+        const issuePercentage = subject.punctuality_percentage;
+
+        // The text is now just the percentage itself
+        punctualityText = `${Math.round(issuePercentage)}%`;
+
+        // The class (color) is determined by the new thresholds
+        if (issuePercentage > 10) {
+            punctualityClass = 'punctuality-poor'; // 🔴 Red for > 10% issues
+        } else if (issuePercentage > 5) {
+            punctualityClass = 'punctuality-warning'; // 🟠 Orange for > 5% and <= 10% issues
         } else {
-          punctualityText = `${subject.punctuality_late_count} LATE (${Math.round(subject.punctuality_percentage)}%)`;
-          punctualityClass = 'punctuality-late';
+            punctualityClass = 'punctuality-good'; // 🟢 Green for <= 5% issues
         }
 
         reportBody += `
@@ -239,7 +212,9 @@ function buildAdminReportHtml(data: any[]): string {
                 <td class="progress-cell">${subject.expected_completion_lecture}</td>
                 <td class="progress-cell">${subject.actual_completion_lecture}</td>
                 <td class="${pacingClass}">${pacingText}</td>
-                <td class="${punctualityClass}">${punctualityText}</td>
+                <td class="col-punctuality">
+                  <span class="punctuality-indicator ${punctualityClass}">${punctualityText}</span>
+                </td>
               </tr>`;
       }
       
@@ -455,12 +430,45 @@ function buildAdminReportHtml(data: any[]): string {
             font-weight: 600;
             font-size: 10px;
         }
-            .status-ahead {
+
+        .status-ahead {
             color: #28a745;
             font-weight: 600;
             font-size: 10px;
         }
 
+        /* Updated Punctuality Styles for Color-Coded System */
+        .col-punctuality {
+            text-align: center;
+        }
+
+        .punctuality-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 10px;
+        }
+
+        .punctuality-good {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .punctuality-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .punctuality-poor {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Legacy styles for backward compatibility */
         .punctuality-ontime {
             color: #28a745;
             font-weight: 600;

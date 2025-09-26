@@ -72,41 +72,45 @@ export function calculateCprSummaryForSubject(
     };
 }
 
-// New function to calculate punctuality metrics
+// Updated function to calculate punctuality as issue percentage
 export function calculatePunctualityForSubject(cprModules: CprModuleWithTopics[]) {
-    const allSubTopics = cprModules.flatMap(m => 
+    const allSubTopics = cprModules.flatMap(m =>
         m.topics.flatMap(t => t.subTopics)
     );
-    
-    let lateCount = 0;
-    let totalWithDates = 0;
-    let onTimeCount = 0;
-    
-    for (const subTopic of allSubTopics) {
-        if (subTopic.planned_start_date && subTopic.actual_start_date) {
-            totalWithDates++;
-            const plannedDate = new Date(subTopic.planned_start_date);
-            const actualDate = new Date(subTopic.actual_start_date);
-            
-            // Reset time to compare only dates
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    const topicsDue = allSubTopics.filter(st =>
+        st.planned_start_date && new Date(st.planned_start_date) <= today
+    );
+
+    let punctualityIssueCount = 0;
+    for (const subTopic of topicsDue) {
+        if (!subTopic.actual_start_date) {
+            punctualityIssueCount++; // Counts topics that should have started but haven't
+        } else {
+            const plannedDate = new Date(subTopic.planned_start_date!);
+            const actualDate = new Date(subTopic.actual_start_date!);
             plannedDate.setHours(0, 0, 0, 0);
             actualDate.setHours(0, 0, 0, 0);
-            
+
             if (actualDate > plannedDate) {
-                lateCount++;
-            } else {
-                onTimeCount++;
+                punctualityIssueCount++; // Counts topics that started late
             }
         }
     }
-    
-    const punctualityPercentage = totalWithDates > 0 ? 
-        (onTimeCount / totalWithDates) * 100 : 100;
-    
+
+    const totalTopicsDue = topicsDue.length;
+
+    // Calculate the percentage of ISSUES instead of on-time topics
+    const issuePercentage = totalTopicsDue > 0 ?
+        (punctualityIssueCount / totalTopicsDue) * 100 : 0;
+
     return {
-        punctuality_late_count: lateCount,
-        punctuality_on_time_count: onTimeCount,
-        total_scheduled_topics: totalWithDates,
-        punctuality_percentage: parseFloat(punctualityPercentage.toFixed(1))
+        // This name is kept for compatibility with the HTML function
+        punctuality_late_count: punctualityIssueCount,
+        // THIS VALUE IS NOW THE ISSUE PERCENTAGE
+        punctuality_percentage: parseFloat(issuePercentage.toFixed(1))
     };
 }
