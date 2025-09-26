@@ -166,7 +166,7 @@ function buildAdminReportHtml(data: any[]): string {
                 <th>Expected progress(lec)</th>
                 <th>Actual progress(lec)</th>
                 <th>Pacing Status</th>
-                <th>Punctuality</th>
+                <th>Punctuality Late</th>
               </tr>
             </thead>
             <tbody>`;
@@ -186,21 +186,17 @@ function buildAdminReportHtml(data: any[]): string {
           pacingClass = 'status-ontrack';
         }
 
-        // Updated Punctuality status based on ISSUE PERCENTAGE
         let punctualityText, punctualityClass;
-        // This property now holds the percentage of issues (e.g., 57.1)
         const issuePercentage = subject.punctuality_percentage;
 
-        // The text is now just the percentage itself
         punctualityText = `${Math.round(issuePercentage)}%`;
 
-        // The class (color) is determined by the new thresholds
         if (issuePercentage > 10) {
-            punctualityClass = 'punctuality-poor'; // 🔴 Red for > 10% issues
+            punctualityClass = 'punctuality-poor'; 
         } else if (issuePercentage > 5) {
-            punctualityClass = 'punctuality-warning'; // 🟠 Orange for > 5% and <= 10% issues
+            punctualityClass = 'punctuality-warning'; 
         } else {
-            punctualityClass = 'punctuality-good'; // 🟢 Green for <= 5% issues
+            punctualityClass = 'punctuality-good'; 
         }
 
         reportBody += `
