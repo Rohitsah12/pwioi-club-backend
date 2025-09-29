@@ -5,6 +5,7 @@ interface SubTopic {
     lecture_number: number;
     status: string;
     planned_start_date?: Date | string | null;
+    actual_start_date?: Date | string | null;
 }
 
 interface Topic {
@@ -68,5 +69,48 @@ export function calculateCprSummaryForSubject(
       expected_completion_lecture: expectedLectureNumber,
       actual_completion_lecture: parseFloat(actualLectureProgress.toFixed(2)),
       completion_lag: parseFloat(completionLag.toFixed(2)),
+    };
+}
+
+// Updated function to calculate punctuality as issue percentage
+export function calculatePunctualityForSubject(cprModules: CprModuleWithTopics[]) {
+    const allSubTopics = cprModules.flatMap(m =>
+        m.topics.flatMap(t => t.subTopics)
+    );
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    const topicsDue = allSubTopics.filter(st =>
+        st.planned_start_date && new Date(st.planned_start_date) <= today
+    );
+
+    let punctualityIssueCount = 0;
+    for (const subTopic of topicsDue) {
+        if (!subTopic.actual_start_date) {
+            punctualityIssueCount++; // Counts topics that should have started but haven't
+        } else {
+            const plannedDate = new Date(subTopic.planned_start_date!);
+            const actualDate = new Date(subTopic.actual_start_date!);
+            plannedDate.setHours(0, 0, 0, 0);
+            actualDate.setHours(0, 0, 0, 0);
+
+            if (actualDate > plannedDate) {
+                punctualityIssueCount++; // Counts topics that started late
+            }
+        }
+    }
+
+    const totalTopicsDue = topicsDue.length;
+
+    // Calculate the percentage of ISSUES instead of on-time topics
+    const issuePercentage = totalTopicsDue > 0 ?
+        (punctualityIssueCount / totalTopicsDue) * 100 : 0;
+
+    return {
+        // This name is kept for compatibility with the HTML function
+        punctuality_late_count: punctualityIssueCount,
+        // THIS VALUE IS NOW THE ISSUE PERCENTAGE
+        punctuality_percentage: parseFloat(issuePercentage.toFixed(1))
     };
 }

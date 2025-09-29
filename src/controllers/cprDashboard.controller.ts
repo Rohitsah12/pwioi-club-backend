@@ -671,6 +671,9 @@ export const getLaggingSubjectsAnalysis = catchAsync(async (req: Request, res: R
                 )
                 .reduce((max, subTopic) => Math.max(max, subTopic.lecture_number), 0);
 
+            // Ensure lectures_behind is never negative - subjects ahead will show 0
+            const lecturesBehind = Math.max(0, expectedLectureNumber - actualLectureProgress);
+
             laggingSubjects.push({
                 subjectId: subject.id,
                 subjectName: subject.name,
@@ -678,7 +681,7 @@ export const getLaggingSubjectsAnalysis = catchAsync(async (req: Request, res: R
                 expected_subtopics_in_range,
                 actual_completed_subtopics: actual_completed_in_range,
                 completed_lectures: parseFloat(actualLectureProgress.toFixed(2)),
-                lectures_behind: parseFloat((expectedLectureNumber - actualLectureProgress).toFixed(2)),
+                lectures_behind: parseFloat(lecturesBehind.toFixed(2)),
             });
         }
     }

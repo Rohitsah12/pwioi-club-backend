@@ -1244,7 +1244,10 @@ enum ExamType {
   PROJECT
   FORTNIGHTLY
   INTERNAL_ASSESSMENT
+  MID_SEM
+  QUIZ
   INTERVIEW
+  CLASS_TEST
 }
 
 enum TeacherRole {
